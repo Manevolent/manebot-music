@@ -2,7 +2,7 @@ package io.manebot.plugin.music.repository;
 
 import io.manebot.plugin.music.database.model.TrackFile;
 import io.manebot.plugin.music.database.model.TrackRepository;
-import io.manebot.plugin.music.track.TrackSource;
+import io.manebot.plugin.music.source.TrackSource;
 
 import java.io.*;
 import java.util.UUID;

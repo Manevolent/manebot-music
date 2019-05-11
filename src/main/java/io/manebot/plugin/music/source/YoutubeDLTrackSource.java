@@ -1,4 +1,4 @@
-package io.manebot.plugin.music.track;
+package io.manebot.plugin.music.source;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;

@@ -1,9 +1,8 @@
 package io.manebot.plugin.music.repository;
 
-import io.manebot.plugin.music.track.TrackSource;
+import io.manebot.plugin.music.source.TrackSource;
 
 import java.io.*;
-import java.net.URL;
 import java.util.UUID;
 
 public class NullRepository extends AbstractRepository {

@@ -1,4 +1,4 @@
-package io.manebot.plugin.music.track;
+package io.manebot.plugin.music.source;
 
 import io.manebot.command.CommandSender;
 

@@ -4,7 +4,7 @@ import io.manebot.plugin.Plugin;
 import io.manebot.plugin.music.Music;
 import io.manebot.plugin.music.database.model.TrackRepository;
 import io.manebot.plugin.music.repository.Repository;
-import io.manebot.plugin.music.track.TrackSource;
+import io.manebot.plugin.music.source.TrackSource;
 
 import java.util.*;
 import java.util.function.Function;

@@ -19,9 +19,9 @@ import io.manebot.plugin.music.database.model.Track;
 import io.manebot.plugin.music.repository.FileRepository;
 import io.manebot.plugin.music.repository.NullRepository;
 import io.manebot.plugin.music.repository.Repository;
-import io.manebot.plugin.music.track.DatabaseTrackSource;
-import io.manebot.plugin.music.track.TrackSource;
-import io.manebot.plugin.music.track.YoutubeDLTrackSource;
+import io.manebot.plugin.music.source.DatabaseTrackSource;
+import io.manebot.plugin.music.source.TrackSource;
+import io.manebot.plugin.music.source.YoutubeDLTrackSource;
 import io.manebot.plugin.music.util.SplittableInputStream;
 import io.manebot.user.User;
 import io.manebot.user.UserType;
@@ -35,7 +35,6 @@ import java.io.OutputStream;
 import java.net.URL;
 import java.util.*;
 import java.util.function.Consumer;
-import java.util.logging.Level;
 
 public class Music implements PluginReference {
     private final Plugin plugin;

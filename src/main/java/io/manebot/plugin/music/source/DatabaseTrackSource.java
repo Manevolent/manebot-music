@@ -1,4 +1,4 @@
-package io.manebot.plugin.music.track;
+package io.manebot.plugin.music.source;
 
 import io.manebot.plugin.music.Music;
 import io.manebot.plugin.music.database.model.Community;
