@@ -28,7 +28,6 @@ import io.manebot.user.UserType;
 import io.manebot.virtual.Virtual;
 import io.manebot.virtual.VirtualProcess;
 import org.apache.commons.io.IOUtils;
-import org.bytedeco.javacpp.avformat;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -36,6 +35,7 @@ import java.io.OutputStream;
 import java.net.URL;
 import java.util.*;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 
 public class Music implements PluginReference {
     private final Plugin plugin;
@@ -44,7 +44,7 @@ public class Music implements PluginReference {
     private final Audio audio;
 
     private final Map<Plugin, MusicRegistration> registrations = new LinkedHashMap<>();
-    private final Map<Conversation, Track> playingTracks = new LinkedHashMap<>();
+    private final Map<Conversation, TrackAssociation> playingTracks = new LinkedHashMap<>();
 
     public Music(Plugin plugin, MusicManager manager, Audio audio) {
         this.plugin = plugin;
@@ -200,28 +200,30 @@ public class Music implements PluginReference {
                 channel.getMixer().getBufferSize()
         );
 
+        final TrackAssociation association = new TrackAssociation(track, channel, basePlayer);
+
         try {
             try (AudioChannel.Ownership ownership = channel.obtainChannel(sender.getPlatformUser().getAssociation())) {
-                channel.addPlayer(new TransitionedAudioPlayer(
+                AudioPlayer player = new TransitionedAudioPlayer(
                         basePlayer,
                         track.getLength() == null ? Double.MAX_VALUE : track.getLength(),
                         track.getLength() == null ? 3D : Math.min(track.getLength() / 4D, 3D),
                         new TransitionedAudioPlayer.Callback() {
                             @Override
                             public void onFadeIn() {
-                                playingTracks.put(conversation, track);
+                                playingTracks.put(conversation, association);
                             }
 
                             @Override
                             public void onFadeOut() {
-                                playingTracks.remove(conversation, track);
+                                playingTracks.remove(conversation, association);
                                 onFadeOut.accept(track);
                             }
 
                             @Override
                             public void onFinished(double timePlayedInSeconds) {
                                 // ensure this is called
-                                playingTracks.remove(conversation, track);
+                                playingTracks.remove(conversation, association);
 
                                 if (user.getType() == UserType.ANONYMOUS) return;
 
@@ -230,7 +232,9 @@ public class Music implements PluginReference {
                                 track.addPlayAsync(conversation, user, start, end);
                             }
                         }
-                ));
+                );
+
+                channel.addPlayer(player);
             }
         } catch (Exception e) {
             throw new IOException(e);
@@ -246,6 +250,36 @@ public class Music implements PluginReference {
 
     @Override
     public void unload(Plugin.Future plugin) {
+        new ArrayList<>(playingTracks.values()).forEach(association -> {
+            try {
+                association.getPlayer().stop();
+            } catch (Exception e) {
+                // ignore
+            }
+        });
+    }
 
+    private class TrackAssociation {
+        private final Track track;
+        private final AudioChannel channel;
+        private final AudioPlayer player;
+
+        private TrackAssociation(Track track, AudioChannel channel, AudioPlayer player) {
+            this.track = track;
+            this.channel = channel;
+            this.player = player;
+        }
+
+        public Track getTrack() {
+            return track;
+        }
+
+        public AudioChannel getChannel() {
+            return channel;
+        }
+
+        public AudioPlayer getPlayer() {
+            return player;
+        }
     }
 }

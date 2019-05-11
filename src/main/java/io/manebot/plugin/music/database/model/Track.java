@@ -186,8 +186,8 @@ public class Track extends TimedRow {
     public TrackPlay addPlay(Conversation conversation, User user, double start, double end) {
         try {
             return database.executeTransaction(s -> {
-                TrackPlay trackPlay = new TrackPlay(database);
-
+                TrackPlay trackPlay = new TrackPlay(database, this, conversation, user, start, end);
+                s.persist(trackPlay);
                 return trackPlay;
             });
         } catch (SQLException e) {
