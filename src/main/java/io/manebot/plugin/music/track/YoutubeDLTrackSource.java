@@ -7,13 +7,13 @@ import io.manebot.plugin.music.database.model.Community;
 import java.io.BufferedReader;
 import java.io.IOException;
 
+import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.URL;
+import java.net.*;
 
 import java.net.http.HttpTimeoutException;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 public class YoutubeDLTrackSource implements TrackSource {
@@ -90,20 +90,161 @@ public class YoutubeDLTrackSource implements TrackSource {
             );
         }
 
-        // Read the output stream
+        StringBuilder builder = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            StringBuilder builder = new StringBuilder();
             String line;
             while ((line = reader.readLine()) != null) builder.append(line);
-            return (JsonObject) new JsonParser().parse(builder.toString());
         }
+        return new JsonParser().parse(builder.toString()).getAsJsonObject();
     }
-
-
 
     @Override
     public Result find(Community community, URL url) throws IOException, IllegalArgumentException {
+        // force HTTP for caching and consistency reasons
+        if (url.getProtocol().equals("https"))
+            url = new URL("http", url.getHost(), url.getPort(), url.getFile());
 
+        // download metadata
+        JsonObject response = getJsonMetadata(url);
+
+        // track url
+        String urlString = response.has("url") ? response.get("url").getAsString() : url.toExternalForm();
+        final URL realUrl;
+        try {
+            realUrl = new URI(urlString).toURL();
+        } catch (URISyntaxException e) {
+            throw new IOException(e);
+        }
+
+        // track title
+        String title = response.has("fulltitle") ?
+                response.get("fulltitle").getAsString() :
+                response.get("title").getAsString();
+        if (title == null || title.length() <= 0)
+            throw new IOException("invalid track title: " + title);
+
+        Double duration;
+
+        if (response.has("duration"))
+            duration = response.get("duration").getAsDouble();
+        else
+            duration = null; // pod-cast? live video?
+
+        List<FormatOption> formatOptions = new LinkedList<>();
+
+        if (!response.has("formats") || response.get("formats").isJsonNull()) {
+            if (response.get("direct").getAsBoolean()) {
+                FormatOption formatOption = new FormatOption(
+                        url,
+                        0L,
+                        0D,
+                        0D,
+                        response.get("ext").getAsString(),
+                        "direct",
+                        null,
+                        null
+                );
+
+                if (response.has("http_headers"))
+                    response.getAsJsonObject("http_headers").entrySet()
+                            .forEach(y -> formatOption.getHttpHeaders().put(y.getKey(), y.getValue().getAsString()));
+
+                formatOptions.add(formatOption);
+            } else {
+                throw new IOException("JSON result has no \"formats\" property");
+            }
+        } else {
+            response.get("formats").getAsJsonArray().forEach((x) -> {
+                if (x == null || !x.isJsonObject()) return;
+
+                JsonObject object = x.getAsJsonObject();
+                if (!object.has("url") || object.get("url").isJsonNull()) return;
+
+                try {
+                    FormatOption formatOption = new FormatOption(
+                            URI.create(object.get("url").getAsString().trim()).toURL(),
+                            object.has("filesize") && !object.get("filesize").isJsonNull() ?
+                                    object.get("filesize").getAsLong() : 0,
+                            object.has("abr") && !object.get("abr").isJsonNull() ?
+                                    object.get("abr").getAsDouble() : 0D,
+                            object.has("vbr") && !object.get("vbr").isJsonNull() ?
+                                    object.get("vbr").getAsDouble() : 0D,
+                            object.has("ext") && !object.get("ext").isJsonNull() ?
+                                    object.get("ext").getAsString().trim() : null,
+                            object.has("format_note") && !object.get("format_note").isJsonNull() ?
+                                    object.get("format_note").getAsString().trim() : null,
+                            object.has("acodec") && !object.get("acodec").isJsonNull() ?
+                                    object.get("acodec").getAsString().trim() : null,
+                            object.has("vcodec") && !object.get("vcodec").isJsonNull() ?
+                                    object.get("vcodec").getAsString().trim() : null
+                    );
+
+                    if (object.has("http_headers"))
+                        object.getAsJsonObject("http_headers").entrySet()
+                                .forEach(y -> formatOption.getHttpHeaders().put(y.getKey(), y.getValue().getAsString()));
+
+                    formatOptions.add(formatOption);
+                } catch (MalformedURLException e) {
+                    // continue
+                    return;
+                }
+            });
+        }
+
+        // Select the optimal format for acquisition
+        FormatOption selectedFormat = null;
+        if (formatOptions.size() == 1) {
+            selectedFormat = formatOptions.get(0);
+        } else if (formatOptions.size() > 1) {
+            // We want the highest bitrate, but the lowest filesize.
+            // YouTube throttles the DASH audio options so we totally exclude those from the results
+            // Then, we look for options which explicity provide an audio codec and a bitrate for that codec
+            // And then, we descend by abr, then ascend by the file size
+            // First option is the video we want
+            selectedFormat = formatOptions
+                    .stream()
+                    .filter(x -> x.getNote() == null || !x.getNote().equals("DASH audio"))
+                    .filter(x -> x.getAudioBitrate() > 0).min(((Comparator<FormatOption>)
+                            (a, b) -> Double.compare(b.getAudioBitrate(), a.getAudioBitrate()))
+                            .thenComparingLong(FormatOption::getFilesize)
+                    ).orElse(null);
+        }
+        if (selectedFormat == null)
+            throw new IllegalArgumentException(
+                    "JSON result offered no suitable format of " + formatOptions.size() + " options"
+            );
+
+        final FormatOption format = selectedFormat;
+
+        return new DownloadResult(
+                community,
+                url,
+                selectedFormat.extension,
+                ResultPriority.LOW,
+                (builder) -> {
+                    builder.setName(title);
+                    builder.setLength(duration);
+                    builder.setUrl(realUrl);
+                }
+        ) {
+            @Override
+            public InputStream openDirect() throws IOException {
+                HttpURLConnection urlConnection = (HttpURLConnection) format.getUrl().openConnection();
+                urlConnection.setUseCaches(true);
+                urlConnection.setInstanceFollowRedirects(true);
+                urlConnection.setRequestMethod("GET");
+                for (Map.Entry<String, String> header : format.getHttpHeaders().entrySet())
+                    urlConnection.setRequestProperty(header.getKey(), header.getValue());
+                int responseCode = urlConnection.getResponseCode();
+                if (responseCode / 100 != 2)
+                    throw new IOException(
+                            "Unexpected response code from URL=" +
+                            format.getUrl().toExternalForm() +
+                            ": " + responseCode
+                    );
+                return urlConnection.getInputStream();
+            }
+        };
     }
 
     /**
