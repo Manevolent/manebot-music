@@ -40,11 +40,11 @@ public class TrackPlay extends TimedRow {
     @JoinColumn(name = "trackId")
     private Track track;
 
-    @Column(nullable = false)
+    @ManyToOne(optional = false)
     @JoinColumn(name = "conversationId")
     private Conversation conversation;
 
-    @Column(nullable = false)
+    @ManyToOne(optional = false)
     @JoinColumn(name = "userId")
     private User user;
 

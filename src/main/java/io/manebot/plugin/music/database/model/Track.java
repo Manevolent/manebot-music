@@ -43,10 +43,10 @@ public class Track extends TimedRow {
     @JoinColumn(name = "communityId")
     private Community community;
 
-    @Column(nullable = false)
+    @Column(length = 128, nullable = false)
     private String url;
 
-    @Column(nullable = false)
+    @Column(length = 128, nullable = false)
     private String name;
 
     @Column(nullable = true)

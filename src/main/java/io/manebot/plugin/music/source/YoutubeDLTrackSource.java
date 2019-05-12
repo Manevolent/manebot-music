@@ -43,16 +43,16 @@ public class YoutubeDLTrackSource implements TrackSource {
      */
     private JsonObject getJsonMetadata(URL trackUrl) throws IOException {
         Process process = Runtime.getRuntime().exec(
-                new String[]{
-                        executablePath,
-                        "-4",
-                        "--no-warnings",
-                        "-j",
-                        trackUrl.toExternalForm()
+                new String[] {
+                        executablePath, /* youtube-dl executable path */
+                        "-4", /* force IPv4. YouTube is very strict about IPv6 */
+                        "--no-warnings", /* warnings would flood our error stream */
+                        "-j", /* require JSON metadata output; don't output the actual file (we do that ourselves) */
+                        trackUrl.toExternalForm() /* track URL */
                 }
         );
 
-        // Wait up to the specified timeout to obtain this metadata.
+        // Wait up to the specified timeout to obtain metadata.
         try {
             if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
                 if (process.isAlive()) process.destroyForcibly(); // don't leak the process
@@ -222,6 +222,7 @@ public class YoutubeDLTrackSource implements TrackSource {
                 selectedFormat.extension,
                 ResultPriority.LOW,
                 (builder) -> {
+                    // this code will set the attributes of a new track, if one is needed to recognize this URL.
                     builder.setName(title);
                     builder.setLength(duration);
                     builder.setUrl(realUrl);
@@ -237,11 +238,7 @@ public class YoutubeDLTrackSource implements TrackSource {
                     urlConnection.setRequestProperty(header.getKey(), header.getValue());
                 int responseCode = urlConnection.getResponseCode();
                 if (responseCode / 100 != 2)
-                    throw new IOException(
-                            "Unexpected response code from URL=" +
-                            format.getUrl().toExternalForm() +
-                            ": " + responseCode
-                    );
+                    throw new IOException(responseCode + ": " + urlConnection.getResponseMessage());
                 return urlConnection.getInputStream();
             }
         };

@@ -11,9 +11,9 @@ import java.util.UUID;
 @Entity
 @Table(
         indexes = {
-                @Index(columnList = "trackRepositoryId,uuid", unique = true)
+                @Index(columnList = "repositoryId,uuid", unique = true)
         },
-        uniqueConstraints = {@UniqueConstraint(columnNames ={"trackRepositoryId","uuid"})}
+        uniqueConstraints = {@UniqueConstraint(columnNames ={"repositoryId","uuid"})}
 )
 public class TrackFile extends TimedRow {
     @Transient
@@ -25,7 +25,7 @@ public class TrackFile extends TimedRow {
     private int fileId;
 
     @ManyToOne(optional = false)
-    @JoinColumn(name = "trackRepositoryId")
+    @JoinColumn(name = "repositoryId")
     private TrackRepository trackRepository;
 
     @Column(nullable = false)

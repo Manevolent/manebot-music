@@ -15,19 +15,22 @@ public class Entry implements PluginEntry {
     public void instantiate(Plugin.Builder builder) throws PluginException {
         builder.setType(PluginType.FEATURE);
 
-        Audio audioPlugin = (Audio) builder.requirePlugin(ManifestIdentifier.fromString("io.manebot.plugin:audio"));
-
         Database database = builder.addDatabase("music", databaseBuilder -> {
             databaseBuilder.addDependency(databaseBuilder.getSystemDatabase());
+            databaseBuilder.registerEntity(Community.class);
+            databaseBuilder.registerEntity(TrackRepository.class);
             databaseBuilder.registerEntity(Track.class);
             databaseBuilder.registerEntity(TrackPlay.class);
-            databaseBuilder.registerEntity(TrackRepository.class);
-            databaseBuilder.registerEntity(Community.class);
             databaseBuilder.registerEntity(TrackFile.class);
         });
 
+        Plugin audioPlugin = builder.requirePlugin(ManifestIdentifier.fromString("io.manebot.plugin:audio"));
+
         MusicManager musicManager = new MusicManager(database);
-        builder.setInstance(Music.class, plugin -> new Music(plugin, musicManager, audioPlugin));
-        builder.addCommand("track", new TrackCommand(musicManager));
+        builder.setInstance(
+                Music.class,
+                plugin -> new Music(plugin, musicManager, audioPlugin.getInstance(Audio.class))
+        );
+        builder.addCommand("track", future -> new TrackCommand(future.getPlugin().getInstance(Music.class)));
     }
 }

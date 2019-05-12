@@ -29,6 +29,10 @@ public class TrackRepository extends TimedRow {
     @Transient
     private Repository instance;
 
+    public TrackRepository(Database database) {
+        this.database = database;
+    }
+
     public TrackRepository(Database database, String name, String type, String format, String properties) {
         this.database = database;
         this.name = name;
@@ -42,7 +46,7 @@ public class TrackRepository extends TimedRow {
     @Column()
     private int repositoryId;
 
-    @Column(nullable = false)
+    @Column(length = 64, nullable = false)
     private String name;
 
     @Column(nullable = false)

@@ -10,9 +10,6 @@ import java.util.function.Consumer;
 
 @javax.persistence.Entity
 @Table(
-        indexes = {
-                @Index(columnList = "name")
-        },
         uniqueConstraints = {@UniqueConstraint(columnNames ={"name"})}
 )
 public class Community extends TimedRow {
@@ -35,7 +32,7 @@ public class Community extends TimedRow {
     @Column()
     private int communityId;
 
-    @Column(nullable = false)
+    @Column(length = 64, nullable = false)
     private String name;
 
     @ManyToOne(optional = false)
