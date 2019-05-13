@@ -112,4 +112,15 @@ public class Community extends TimedRow {
             throw new RuntimeException(e);
         }
     }
+
+    public void delete() {
+
+        try {
+            database.executeTransaction(s -> {
+                s.remove(s.find(Community.class, getCommunityId()));
+            });
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }

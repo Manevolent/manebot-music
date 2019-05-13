@@ -2,10 +2,12 @@ package io.manebot.plugin.music.database.model;
 
 import io.manebot.database.Database;
 import io.manebot.plugin.music.repository.NullRepository;
+import io.manebot.plugin.music.repository.Repository;
 
 import java.net.URL;
 import java.sql.SQLException;
 import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 
 public final class MusicManager {
@@ -25,7 +27,7 @@ public final class MusicManager {
         });
     }
 
-    public TrackRepository getTrackRepositoryById(String name) {
+    public TrackRepository getTrackRepositoryByName(String name) {
         return database.execute(s -> {
             return s.createQuery(
                     "SELECT x FROM " + TrackRepository.class.getName() + " x " +
@@ -69,7 +71,7 @@ public final class MusicManager {
     }
 
     public Community createCommunity(String name) {
-        return createCommunity(name, Objects.requireNonNull(getTrackRepositoryById("default")));
+        return createCommunity(name, Objects.requireNonNull(getTrackRepositoryByName("default")));
     }
 
     public Community createCommunity(String name, TrackRepository repository) {
@@ -87,5 +89,18 @@ public final class MusicManager {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public List<Community> getCommunities() {
+        return database.execute(s -> {
+            return s.createQuery("SELECT x FROM " + Community.class.getName() + " x", Community.class).getResultList();
+        });
+    }
+
+    public List<TrackRepository> getRepositories() {
+        return database.execute(s -> {
+            return s.createQuery("SELECT x FROM " + TrackRepository.class.getName() + " x", TrackRepository.class)
+                    .getResultList();
+        });
     }
 }

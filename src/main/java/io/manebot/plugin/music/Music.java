@@ -221,12 +221,20 @@ public class Music implements PluginReference {
 
                             @Override
                             public void onFinished(double timePlayedInSeconds) {
+                                double end = System.currentTimeMillis() / 1000D;
+
                                 // ensure this is called
                                 playingTracks.remove(conversation, association);
 
                                 if (user.getType() == UserType.ANONYMOUS) return;
 
-                                double end = System.currentTimeMillis() / 1000D;
+                                // clamp time played
+                                if (track.getLength() != null)
+                                    timePlayedInSeconds = Math.max(
+                                            0D,
+                                            Math.min(timePlayedInSeconds, track.getLength())
+                                    );
+
                                 double start = end - timePlayedInSeconds;
                                 track.addPlayAsync(conversation, user, start, end);
                             }

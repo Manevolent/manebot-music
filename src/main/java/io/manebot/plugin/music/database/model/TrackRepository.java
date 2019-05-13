@@ -169,4 +169,14 @@ public class TrackRepository extends TimedRow {
     private static Gson createGson() {
         return new Gson();
     }
+
+    public void delete() {
+        try {
+            database.executeTransaction(s -> {
+                s.remove(s.find(TrackRepository.class, getRepositoryId()));
+            });
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
