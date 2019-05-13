@@ -1,5 +1,7 @@
 package io.manebot.plugin.music.config;
 
+import com.github.manevolent.ffmpeg4j.FFmpeg;
+import com.github.manevolent.ffmpeg4j.FFmpegException;
 import com.google.gson.annotations.Expose;
 
 public final class AudioFormat {
@@ -20,5 +22,13 @@ public final class AudioFormat {
     @Override
     public String toString() {
         return Integer.toString(this.sample_rate) + "Hz, " + Integer.toString(this.channels) + "ch";
+    }
+
+    public com.github.manevolent.ffmpeg4j.AudioFormat toFFmpeg() throws FFmpegException {
+        return new com.github.manevolent.ffmpeg4j.AudioFormat(
+                sample_rate,
+                channels,
+                FFmpeg.guessFFMpegChannelLayout(channels)
+        );
     }
 }

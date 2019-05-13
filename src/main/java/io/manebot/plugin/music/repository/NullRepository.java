@@ -49,5 +49,10 @@ public class NullRepository extends AbstractRepository {
         public OutputStream openWrite(String format) throws IOException {
             throw new UnsupportedOperationException();
         }
+
+        @Override
+        public void delete() {
+            throw new UnsupportedOperationException();
+        }
     }
 }

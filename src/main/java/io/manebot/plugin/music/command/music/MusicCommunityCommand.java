@@ -49,7 +49,7 @@ public class MusicCommunityCommand extends AnnotatedCommandExecutor {
         if (community == null) throw new CommandArgumentException("Community not found.");
 
         sender.sendDetails(builder -> builder
-                .key("Community").name(community.getName())
+                .name("Community").key(community.getName())
                 .item("Repository", community.getRepository() != null ? community.getRepository().getName() : "(none)")
                 .item("Created", community.getCreatedDate())
                 .item("Updated", community.getUpdatedDate())
@@ -71,7 +71,7 @@ public class MusicCommunityCommand extends AnnotatedCommandExecutor {
         sender.sendMessage("Community \"" + oldName + "\" renamed to \"" + community.getName() + "\".");
     }
 
-    @Command(description = "Renames a community", permission = "music.community.rename")
+    @Command(description = "Sets a community's repository", permission = "music.repository.set")
     public void setRepository(CommandSender sender,
                        @CommandArgumentLabel.Argument(label = "set-repository") String setRepository,
                        @CommandArgumentString.Argument(label = "name") String name,

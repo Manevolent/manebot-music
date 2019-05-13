@@ -47,7 +47,7 @@ public class MusicRepositoryCommand extends AnnotatedCommandExecutor {
         TrackRepository repository = musicManager.getTrackRepositoryByName(name);
         if (repository == null) throw new CommandArgumentException("Repository not found.");
         sender.sendDetails(builder -> builder
-                .key("Repository").name(repository.getName())
+                .name("Repository").key(repository.getName())
                 .item("Type", repository.getType())
                 .item("Format", repository.getFormat() == null ? "(none)" : repository.getFormat().toString())
                 .item("Created", repository.getCreatedDate())

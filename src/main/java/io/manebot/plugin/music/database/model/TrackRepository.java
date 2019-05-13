@@ -10,6 +10,7 @@ import io.manebot.plugin.music.repository.Repository;
 
 import javax.persistence.*;
 import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.sql.SQLException;
 import java.util.Objects;
@@ -28,6 +29,8 @@ public class TrackRepository extends TimedRow {
 
     @Transient
     private Repository instance;
+    @Transient
+    private final Object instanceLock = new Object();
 
     public TrackRepository(Database database) {
         this.database = database;
@@ -159,11 +162,19 @@ public class TrackRepository extends TimedRow {
         }
     }
 
+    @SuppressWarnings("unchecked")
     public Repository getInstance() {
+        synchronized (instanceLock) {
+            if (instance == null) {
+                try {
+                    Class clazz = Class.forName(getType());
+                    instance = (Repository) clazz.getConstructor(TrackRepository.class).newInstance(this);
+                } catch (ReflectiveOperationException e) {
+                }
+            }
+        }
+
         return instance;
-    }
-    public void setInstance(Repository instance) {
-        this.instance = instance;
     }
 
     private static Gson createGson() {

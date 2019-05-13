@@ -2,6 +2,18 @@ package io.manebot.plugin.music;
 
 import com.github.manevolent.ffmpeg4j.FFmpeg;
 import com.github.manevolent.ffmpeg4j.FFmpegException;
+import com.github.manevolent.ffmpeg4j.FFmpegIO;
+import com.github.manevolent.ffmpeg4j.FFmpegInput;
+import com.github.manevolent.ffmpeg4j.filter.audio.AudioFilter;
+import com.github.manevolent.ffmpeg4j.filter.audio.AudioFilterNone;
+import com.github.manevolent.ffmpeg4j.filter.audio.FFmpegAudioResampleFilter;
+import com.github.manevolent.ffmpeg4j.filter.video.VideoFilterNone;
+import com.github.manevolent.ffmpeg4j.source.AudioSourceSubstream;
+import com.github.manevolent.ffmpeg4j.source.MediaSourceSubstream;
+import com.github.manevolent.ffmpeg4j.stream.output.FFmpegTargetStream;
+import com.github.manevolent.ffmpeg4j.stream.source.FFmpegSourceStream;
+import com.github.manevolent.ffmpeg4j.transcoder.Transcoder;
+
 import io.manebot.command.CommandSender;
 import io.manebot.conversation.Conversation;
 import io.manebot.plugin.Plugin;
@@ -13,6 +25,7 @@ import io.manebot.plugin.audio.player.FFmpegAudioPlayer;
 import io.manebot.plugin.audio.player.TransitionedAudioPlayer;
 import io.manebot.plugin.music.api.DefaultMusicRegistration;
 import io.manebot.plugin.music.api.MusicRegistration;
+import io.manebot.plugin.music.config.AudioDownloadFormat;
 import io.manebot.plugin.music.database.model.Community;
 import io.manebot.plugin.music.database.model.MusicManager;
 import io.manebot.plugin.music.database.model.Track;
@@ -28,13 +41,18 @@ import io.manebot.user.UserType;
 import io.manebot.virtual.Virtual;
 import io.manebot.virtual.VirtualProcess;
 import org.apache.commons.io.IOUtils;
+import org.bytedeco.javacpp.avformat;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class Music implements PluginReference {
     private final Plugin plugin;
@@ -166,6 +184,9 @@ public class Music implements PluginReference {
             format = result.getFormat();
         }
 
+        // (attempt to) get input format from FFmpeg
+        avformat.AVInputFormat inputFormat = FFmpeg.getInputFormatByName(format);
+
         // If we are saving this to the cache, we should wrap/shadow the "direct" stream with an async copy stream.
         // If the length is undefined, we cannot cache this track.
         if (!resource.exists() && resource.canWrite() && track.getLength() != null) {
@@ -174,12 +195,109 @@ public class Music implements PluginReference {
 
             final InputStream split = splitter.split();
             final OutputStream target = resource.openWrite();
+            CompletableFuture<Boolean> future = new CompletableFuture<>();
 
             Runnable copyRunnable = () -> {
+                FFmpegInput input = null;
+                FFmpegIO output = null;
+
                 try {
-                    IOUtils.copy(split, target);
-                } catch (IOException e) {
-                    e.printStackTrace();
+                    AudioDownloadFormat downloadFormat = resource.getRepository().getDownloadFormat();
+                    if (downloadFormat != null) {
+                        FFmpegSourceStream sourceStream;
+
+                        try {
+                            input = new FFmpegInput(split);
+                            sourceStream = input.open(inputFormat);
+                            sourceStream.registerStreams();
+                        } catch (Exception ex) {
+                            throw new FFmpegException(ex);
+                        }
+
+                        try {
+                            output = FFmpegIO.openOutputStream(target, FFmpegIO.DEFAULT_BUFFER_SIZE);
+                        } catch (Exception ex) {
+                            throw new FFmpegException(ex);
+                        }
+
+                        FFmpegTargetStream targetStream = new FFmpegTargetStream(
+                                downloadFormat.getContainerFormat(),
+                                output,
+                                new FFmpegTargetStream.FFmpegNativeOutput()
+                        );
+
+                        AudioSourceSubstream defaultAudioSubstream =
+                                (AudioSourceSubstream)
+                                        sourceStream.getSubstreams().stream()
+                                                .filter(x -> x instanceof AudioSourceSubstream)
+                                                .findFirst().orElse(null);
+
+                        AudioFilter audioFilter = new AudioFilterNone();
+                        if (defaultAudioSubstream != null &&
+                                downloadFormat.getAudioCodec() != null &&
+                                downloadFormat.getAudioBitrate() > 0) {
+                            targetStream.registerAudioSubstream(
+                                    downloadFormat.getAudioCodec(),
+                                    downloadFormat.getAudioFormat().toFFmpeg(),
+                                    Collections.singletonMap("b", Integer.toString(downloadFormat.getAudioBitrate()))
+                            );
+
+                            if (!downloadFormat.getAudioFormat().toFFmpeg().equals(defaultAudioSubstream.getFormat())) {
+                                audioFilter = new FFmpegAudioResampleFilter(
+                                        defaultAudioSubstream.getFormat(),
+                                        downloadFormat.getAudioFormat().toFFmpeg(),
+                                        FFmpegAudioResampleFilter.DEFAULT_BUFFER_SIZE
+                                );
+                            }
+                        }
+
+                        for (MediaSourceSubstream substream : sourceStream.getSubstreams()) {
+                            if (substream != defaultAudioSubstream) substream.setDecoding(false);
+                        }
+
+                        try {
+                            new Transcoder(
+                                    sourceStream,
+                                    targetStream,
+                                    audioFilter,
+                                    new VideoFilterNone(), /* ignored */
+                                    2D
+                            ).transcode();
+                        } catch (EOFException eof) {
+                            // ignore
+                        }
+
+                        future.complete(true);
+                    } else {
+                        // Download format doesn't specify a specific target format; simple copy
+                        IOUtils.copy(split, target);
+                    }
+                } catch (Throwable e) {
+                    try {
+                        if (input != null) input.close();
+                    } catch (Exception e2) {
+                        e.addSuppressed(e2);
+                    }
+
+                    try {
+                        if (output != null) output.close();
+                    } catch (Exception e2) {
+                        e.addSuppressed(e2);
+                    }
+
+                    try {
+                        if (target != null) target.close();
+                    } catch (Exception e2) {
+                        e.addSuppressed(e2);
+                    }
+
+                    try {
+                        resource.delete();
+                    } catch (Exception e2) {
+                        e.addSuppressed(e2);
+                    }
+
+                    future.completeExceptionally(e);
                 }
             };
 
@@ -194,7 +312,7 @@ public class Music implements PluginReference {
         AudioPlayer basePlayer = FFmpegAudioPlayer.open(
                 AudioPlayer.Type.BLOCKING,
                 Virtual.getInstance().currentUser(),
-                FFmpeg.getInputFormatByName(format),
+                inputFormat,
                 direct,
                 channel.getMixer().getBufferSize()
         );

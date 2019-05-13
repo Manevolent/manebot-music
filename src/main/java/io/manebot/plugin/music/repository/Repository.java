@@ -67,6 +67,8 @@ public interface Repository {
         default OutputStream openWrite() throws IOException {
             return openWrite(getRepository().getDownloadFormat().getContainerFormat());
         }
+
+        void delete();
     }
 
     abstract class TrackFileResource implements Resource {

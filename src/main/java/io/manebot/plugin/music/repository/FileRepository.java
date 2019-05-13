@@ -69,5 +69,10 @@ public class FileRepository extends AbstractRepository {
                 }
             };
         }
+
+        @Override
+        public void delete() {
+            if (!file.delete()) throw new IllegalStateException();
+        }
     }
 }
