@@ -71,6 +71,21 @@ public class MusicCommunityCommand extends AnnotatedCommandExecutor {
         sender.sendMessage("Community \"" + oldName + "\" renamed to \"" + community.getName() + "\".");
     }
 
+    @Command(description = "Renames a community", permission = "music.community.rename")
+    public void setRepository(CommandSender sender,
+                       @CommandArgumentLabel.Argument(label = "set-repository") String setRepository,
+                       @CommandArgumentString.Argument(label = "name") String name,
+                       @CommandArgumentString.Argument(label = "repository") String newName) throws CommandExecutionException {
+        Community community = musicManager.getCommunityByName(name);
+        if (community == null) throw new CommandArgumentException("Community not found.");
+
+        TrackRepository repository = musicManager.getTrackRepositoryByName(name);
+        if (repository == null) throw new CommandArgumentException("Repository not found.");
+
+        community.setRepository(repository);
+        sender.sendMessage("Community \"" + community.getName() + "\" repository set to \"" + repository.getName() + "\".");
+    }
+
     @Command(description = "Creates a community", permission = "music.community.create")
     public void create(CommandSender sender,
                        @CommandArgumentLabel.Argument(label = "create") String create,
