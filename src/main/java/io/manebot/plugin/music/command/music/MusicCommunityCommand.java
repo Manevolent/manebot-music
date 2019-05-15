@@ -144,9 +144,15 @@ public class MusicCommunityCommand extends AnnotatedCommandExecutor {
         io.manebot.chat.Community platformCommunity = connection.getCommunity(id);
         if (platformCommunity == null) throw new CommandArgumentException("Community not found.");
 
-        CommunityAssociation association = community.getAssociation((io.manebot.database.model.Platform) platform, id);
+        CommunityAssociation association = community.getAssociation(
+                (io.manebot.database.model.Platform) platform,
+                platformCommunity.getId()
+        );
         if (association == null) {
-            association = community.createAssociation((io.manebot.database.model.Platform) platform, id);
+            association = community.createAssociation(
+                    (io.manebot.database.model.Platform) platform,
+                    platformCommunity.getId()
+            );
         }
 
         sender.sendMessage("Music community \"" + community.getName() + "\" associated to " +
@@ -168,19 +174,13 @@ public class MusicCommunityCommand extends AnnotatedCommandExecutor {
         Platform platform = bot.getPlatformById(platformId);
         if (platform == null) throw new CommandArgumentException("Platform not found.");
 
-        PlatformConnection connection = platform.getConnection();
-        if (connection == null) throw new CommandArgumentException("Platform is not connected.");
-
-        io.manebot.chat.Community platformCommunity = connection.getCommunity(id);
-        if (platformCommunity == null) throw new CommandArgumentException("Community not found.");
-
         CommunityAssociation association = community.getAssociation((io.manebot.database.model.Platform) platform, id);
         if (association == null) throw new CommandArgumentException("Association not found.");
 
         association.delete();
 
         sender.sendMessage("Music community \"" + community.getName() + "\" disassociated from " +
-                platform.getId() + " community \"" + platformCommunity.getId() + "\"."
+                platform.getId() + " community \"" + association.getId() + "\"."
         );
     }
 }
