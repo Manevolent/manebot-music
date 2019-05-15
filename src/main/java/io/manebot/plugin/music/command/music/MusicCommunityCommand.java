@@ -124,7 +124,7 @@ public class MusicCommunityCommand extends AnnotatedCommandExecutor {
                 repository.getName() + "\".");
     }
 
-    @Command(description = "Associates a community to a music community",
+    @Command(description = "Associates a music community to a bot community",
             permission = "music.community.association.create")
     public void associate(CommandSender sender,
                           @CommandArgumentLabel.Argument(label = "associate") String associate,
@@ -154,9 +154,9 @@ public class MusicCommunityCommand extends AnnotatedCommandExecutor {
         );
     }
 
-    @Command(description = "Disassociates a community from a music community",
+    @Command(description = "Disassociates a music community from a bot community",
             permission = "music.community.association.remvove")
-    public void unassociate(CommandSender sender,
+    public void disassociate(CommandSender sender,
                           @CommandArgumentLabel.Argument(label = "disassociate") String disassociate,
                           @CommandArgumentString.Argument(label = "name") String communityName,
                           @CommandArgumentString.Argument(label = "platform") String platformId,
