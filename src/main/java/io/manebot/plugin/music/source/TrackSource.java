@@ -32,7 +32,7 @@ public interface TrackSource {
 
     /**
      * Attempts to find a track by the specified URL.
-     * @param community community to search from or associate videos to.
+     * @param community community to search from or createAssociation videos to.
      * @param url URL of track to obtain.
      * @return Result instance if one is suggested, <i>null</i> otherwise.
      * @throws IOException if there is a problem obtaining track metadata.

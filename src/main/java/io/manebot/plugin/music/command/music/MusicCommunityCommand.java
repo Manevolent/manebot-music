@@ -1,5 +1,6 @@
 package io.manebot.plugin.music.command.music;
 
+import io.manebot.Bot;
 import io.manebot.command.CommandSender;
 import io.manebot.command.exception.CommandArgumentException;
 import io.manebot.command.exception.CommandExecutionException;
@@ -7,15 +8,21 @@ import io.manebot.command.executor.chained.AnnotatedCommandExecutor;
 import io.manebot.command.executor.chained.argument.CommandArgumentLabel;
 import io.manebot.command.executor.chained.argument.CommandArgumentPage;
 import io.manebot.command.executor.chained.argument.CommandArgumentString;
+import io.manebot.platform.Platform;
+import io.manebot.platform.PlatformConnection;
+import io.manebot.platform.PlatformManager;
 import io.manebot.plugin.music.database.model.Community;
+import io.manebot.plugin.music.database.model.CommunityAssociation;
 import io.manebot.plugin.music.database.model.MusicManager;
 import io.manebot.plugin.music.database.model.TrackRepository;
 
 public class MusicCommunityCommand extends AnnotatedCommandExecutor {
     private final MusicManager musicManager;
+    private final Bot bot;
 
-    public MusicCommunityCommand(MusicManager musicManager) {
+    public MusicCommunityCommand(MusicManager musicManager, Bot bot) {
         this.musicManager = musicManager;
+        this.bot = bot;
     }
 
     @Command(description = "Lists communities", permission = "music.community.list")
@@ -115,5 +122,65 @@ public class MusicCommunityCommand extends AnnotatedCommandExecutor {
 
         sender.sendMessage("Community \"" + community.getName() + "\" created using repository \"" +
                 repository.getName() + "\".");
+    }
+
+    @Command(description = "Associates a community to a music community",
+            permission = "music.community.association.create")
+    public void associate(CommandSender sender,
+                          @CommandArgumentLabel.Argument(label = "associate") String associate,
+                          @CommandArgumentString.Argument(label = "name") String communityName,
+                          @CommandArgumentString.Argument(label = "platform") String platformId,
+                          @CommandArgumentString.Argument(label = "id") String id)
+            throws CommandExecutionException {
+        Community community = musicManager.getCommunityByName(communityName);
+        if (community == null) throw new CommandArgumentException("Community not found.");
+
+        Platform platform = bot.getPlatformById(platformId);
+        if (platform == null) throw new CommandArgumentException("Platform not found.");
+
+        PlatformConnection connection = platform.getConnection();
+        if (connection == null) throw new CommandArgumentException("Platform is not connected.");
+
+        io.manebot.chat.Community platformCommunity = connection.getCommunity(id);
+        if (platformCommunity == null) throw new CommandArgumentException("Community not found.");
+
+        CommunityAssociation association = community.getAssociation((io.manebot.database.model.Platform) platform, id);
+        if (association == null) {
+            association = community.createAssociation((io.manebot.database.model.Platform) platform, id);
+        }
+
+        sender.sendMessage("Music community \"" + community.getName() + "\" associated to " +
+                platform.getId() + " community \"" + platformCommunity.getId() + "\"."
+        );
+    }
+
+    @Command(description = "Disassociates a community from a music community",
+            permission = "music.community.association.remvove")
+    public void unassociate(CommandSender sender,
+                          @CommandArgumentLabel.Argument(label = "disassociate") String disassociate,
+                          @CommandArgumentString.Argument(label = "name") String communityName,
+                          @CommandArgumentString.Argument(label = "platform") String platformId,
+                          @CommandArgumentString.Argument(label = "id") String id)
+            throws CommandExecutionException {
+        Community community = musicManager.getCommunityByName(communityName);
+        if (community == null) throw new CommandArgumentException("Community not found.");
+
+        Platform platform = bot.getPlatformById(platformId);
+        if (platform == null) throw new CommandArgumentException("Platform not found.");
+
+        PlatformConnection connection = platform.getConnection();
+        if (connection == null) throw new CommandArgumentException("Platform is not connected.");
+
+        io.manebot.chat.Community platformCommunity = connection.getCommunity(id);
+        if (platformCommunity == null) throw new CommandArgumentException("Community not found.");
+
+        CommunityAssociation association = community.getAssociation((io.manebot.database.model.Platform) platform, id);
+        if (association == null) throw new CommandArgumentException("Association not found.");
+
+        association.delete();
+
+        sender.sendMessage("Music community \"" + community.getName() + "\" disassociated from " +
+                platform.getId() + " community \"" + platformCommunity.getId() + "\"."
+        );
     }
 }

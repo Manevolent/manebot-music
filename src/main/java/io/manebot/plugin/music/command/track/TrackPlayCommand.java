@@ -32,7 +32,7 @@ public class TrackPlayCommand extends AnnotatedCommandExecutor {
         }
 
         try {
-            Track track = music.play(sender, null, url);
+            Track track = music.play(sender, url);
             sender.sendMessage("(Playing \"" + track.getName() + "\")");
         } catch (Exception e) {
             throw new CommandExecutionException(e);

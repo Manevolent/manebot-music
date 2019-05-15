@@ -1,11 +1,13 @@
 package io.manebot.plugin.music.database.model;
 
 import io.manebot.database.Database;
+import io.manebot.database.model.Platform;
 import io.manebot.database.model.TimedRow;
 
 import javax.persistence.*;
 import java.net.URL;
 import java.sql.SQLException;
+import java.util.Collection;
 import java.util.function.Consumer;
 
 @javax.persistence.Entity
@@ -81,6 +83,42 @@ public class Community extends TimedRow {
                 // TODO: tag track
 
                 return track;
+            });
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Collection<CommunityAssociation> getAssociations() {
+        return database.execute(s -> {
+            return s.createQuery(
+                    "SELECT x FROM " + CommunityAssociation.class.getName() + " x " +
+                            "INNER JOIN community c " +
+                            "WHERE c.communityId = :communityId", CommunityAssociation.class)
+                    .setParameter("communityId", getCommunityId())
+                    .getResultList();
+        });
+    }
+
+    public CommunityAssociation getAssociation(Platform platform, String id) {
+        return database.execute(s -> {
+            return s.createQuery(
+                    "SELECT x FROM " + CommunityAssociation.class.getName() + " x " +
+                            "WHERE x.platformId = :platformId AND x.id = :id", CommunityAssociation.class)
+                    .setParameter("platformId", platform.getPlatformId())
+                    .setParameter("id", id)
+                    .getResultStream()
+                    .findFirst()
+                    .orElse(null);
+        });
+    }
+
+    public CommunityAssociation createAssociation(Platform platform, String id) {
+        try {
+            return database.executeTransaction(s -> {
+                CommunityAssociation association = new CommunityAssociation(database, this, platform, id);
+                s.persist(association);
+                return association;
             });
         } catch (SQLException e) {
             throw new RuntimeException(e);

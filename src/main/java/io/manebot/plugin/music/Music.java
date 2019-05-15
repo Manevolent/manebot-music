@@ -14,8 +14,10 @@ import com.github.manevolent.ffmpeg4j.stream.output.FFmpegTargetStream;
 import com.github.manevolent.ffmpeg4j.stream.source.FFmpegSourceStream;
 import com.github.manevolent.ffmpeg4j.transcoder.Transcoder;
 
+import io.manebot.chat.Chat;
 import io.manebot.command.CommandSender;
 import io.manebot.conversation.Conversation;
+import io.manebot.database.model.Platform;
 import io.manebot.plugin.Plugin;
 import io.manebot.plugin.PluginReference;
 import io.manebot.plugin.audio.Audio;
@@ -143,6 +145,21 @@ public class Music implements PluginReference {
             return databaseResult;
 
         return findRemoteTrack(community, url);
+    }
+
+    public Community getCommunity(Chat chat) {
+        if (chat == null) return null;
+        io.manebot.chat.Community platformCommunity = chat.getCommunity();
+        if (platformCommunity == null) return null;
+        return musicManager.getCommunityByPlatformSpecificId((Platform) chat.getPlatform(), platformCommunity.getId());
+    }
+
+    public Community getCommunity(CommandSender sender) {
+        return getCommunity(sender.getChat());
+    }
+
+    public Track play(CommandSender sender, URL url) throws IOException, FFmpegException {
+        return play(sender, getCommunity(sender), url, (track) -> {});
     }
 
     public Track play(CommandSender sender, Community community, URL url) throws IOException, FFmpegException {

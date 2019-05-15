@@ -1,6 +1,8 @@
 package io.manebot.plugin.music.database.model;
 
+import io.manebot.chat.Chat;
 import io.manebot.database.Database;
+import io.manebot.database.model.Platform;
 import io.manebot.plugin.music.repository.NullRepository;
 import io.manebot.plugin.music.repository.Repository;
 
@@ -56,6 +58,21 @@ public final class MusicManager {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public Community getCommunityByPlatformSpecificId(Platform platform, String id) {
+        return database.execute(s -> {
+            return s.createQuery(
+                    "SELECT c FROM " + CommunityAssociation.class.getName() + " x " +
+                            "INNER JOIN community c " +
+                            "INNER JOIN c.platform p " +
+                            "WHERE p.platformId = :platformId AND x.id = :id", Community.class)
+                    .setParameter("platformId", platform.getPlatformId())
+                    .setParameter("id", id)
+                    .getResultStream()
+                    .findFirst()
+                    .orElse(null);
+        });
     }
 
     public Community getCommunityByName(String name) {

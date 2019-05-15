@@ -38,6 +38,6 @@ public class Entry implements PluginEntry {
         );
 
         builder.addCommand("track", future -> new TrackCommand(future.getPlugin().getInstance(Music.class)));
-        builder.addCommand("music", future -> new MusicCommand(musicManager));
+        builder.addCommand("music", future -> new MusicCommand(musicManager, future.getPlugin().getBot()));
     }
 }
