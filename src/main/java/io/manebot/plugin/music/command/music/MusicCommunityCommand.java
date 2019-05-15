@@ -51,6 +51,7 @@ public class MusicCommunityCommand extends AnnotatedCommandExecutor {
         sender.sendDetails(builder -> builder
                 .name("Community").key(community.getName())
                 .item("Repository", community.getRepository() != null ? community.getRepository().getName() : "(none)")
+                .item("Tracks", community.countTracks())
                 .item("Created", community.getCreatedDate())
                 .item("Updated", community.getUpdatedDate())
         );

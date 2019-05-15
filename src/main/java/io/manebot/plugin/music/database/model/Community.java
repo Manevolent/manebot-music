@@ -43,11 +43,19 @@ public class Community extends TimedRow {
         return communityId;
     }
 
+    public long countTracks() {
+        return database.execute(s -> (Long) s.createQuery(
+                "SELECT COUNT(x) FROM " + Track.class.getName() + " x " +
+                        "INNER JOIN x.community c " +
+                        "WHERE c.communityId = :communityId"
+        ).setParameter("communityId", getCommunityId()).getSingleResult());
+    }
+
     public Track getTrack(URL url) {
         return database.execute(s -> {
             return s.createQuery(
                     "SELECT x FROM " + Track.class.getName() + " x " +
-                            "INNER JOIN x.community c" +
+                            "INNER JOIN x.community c " +
                             "WHERE c.communityId = :communityId AND x.url=:url",
                     Track.class
             ).setParameter("communityId", communityId).setParameter("url", url.toExternalForm())

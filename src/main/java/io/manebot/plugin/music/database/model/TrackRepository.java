@@ -139,7 +139,7 @@ public class TrackRepository extends TimedRow {
         return database.execute(s -> {
             return s.createQuery(
                     "SELECT x FROM " + TrackFile.class.getName() + " x " +
-                            "INNER JOIN x.trackRepository c" +
+                            "INNER JOIN x.trackRepository c " +
                             "WHERE c.repositoryId = :repositoryId AND x.uuid=:uuid",
                     TrackFile.class
             ).setParameter("repositoryId", getRepositoryId()).setParameter("uuid", uuid)
@@ -179,6 +179,14 @@ public class TrackRepository extends TimedRow {
 
     private static Gson createGson() {
         return new Gson();
+    }
+
+    public long countFiles() {
+        return database.execute(s -> (Long) s.createQuery(
+                "SELECT COUNT(x) FROM " + TrackFile.class.getName() + " x " +
+                        "INNER JOIN x.trackRepository c " +
+                        "WHERE c.repositoryId = :repositoryId"
+        ).setParameter("repositoryId", getRepositoryId()).getSingleResult());
     }
 
     public void delete() {

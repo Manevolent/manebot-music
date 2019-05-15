@@ -189,6 +189,8 @@ public class Music implements PluginReference {
 
         // If we are saving this to the cache, we should wrap/shadow the "direct" stream with an async copy stream.
         // If the length is undefined, we cannot cache this track.
+        Runnable copyRunnable;
+
         if (!resource.exists() && resource.canWrite() && track.getLength() != null) {
             SplittableInputStream splitter = new SplittableInputStream(direct);
             direct = splitter;
@@ -197,7 +199,7 @@ public class Music implements PluginReference {
             final OutputStream target = resource.openWrite();
             CompletableFuture<Boolean> future = new CompletableFuture<>();
 
-            Runnable copyRunnable = () -> {
+            copyRunnable = () -> {
                 FFmpegInput input = null;
                 FFmpegIO output = null;
 
@@ -300,13 +302,7 @@ public class Music implements PluginReference {
                     future.completeExceptionally(e);
                 }
             };
-
-            VirtualProcess currentProcess = Virtual.getInstance().currentProcess();
-            if (currentProcess != null)
-                currentProcess.newThreadFactory().newThread(copyRunnable).start();
-            else
-                new Thread(copyRunnable).start();
-        }
+        } else copyRunnable = null;
 
         // Use FFmpeg4j to open the "direct" input stream and stream the file from the preferred source.
         AudioPlayer basePlayer = FFmpegAudioPlayer.open(
@@ -360,6 +356,14 @@ public class Music implements PluginReference {
                 );
 
                 channel.addPlayer(player);
+
+                if (copyRunnable != null) {
+                    VirtualProcess currentProcess = Virtual.getInstance().currentProcess();
+                    if (currentProcess != null)
+                        currentProcess.newThreadFactory().newThread(copyRunnable).start();
+                    else
+                        new Thread(copyRunnable).start();
+                }
             }
         } catch (Exception e) {
             throw new IOException(e);

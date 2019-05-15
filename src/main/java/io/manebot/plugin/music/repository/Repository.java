@@ -28,6 +28,14 @@ public interface Repository {
     }
 
     /**
+     * Counts the total number of tracks in this repository.
+     * @return
+     */
+    default long count() {
+        return getTrackRepository().countFiles();
+    }
+
+    /**
      * Opens the specified UUID on this repository.
      * @param uuid UUID to open.
      * @return resource corresponding to the specified UUID.
