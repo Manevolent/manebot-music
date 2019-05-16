@@ -19,6 +19,7 @@ public class Entry implements PluginEntry {
         Database database = builder.addDatabase("music", databaseBuilder -> {
             databaseBuilder.addDependency(databaseBuilder.getSystemDatabase());
             databaseBuilder.registerEntity(Community.class);
+            databaseBuilder.registerEntity(CommunityAssociation.class);
             databaseBuilder.registerEntity(TrackRepository.class);
             databaseBuilder.registerEntity(Track.class);
             databaseBuilder.registerEntity(TrackPlay.class);
@@ -38,6 +39,8 @@ public class Entry implements PluginEntry {
         );
 
         builder.addCommand("track", future -> new TrackCommand(future.getPlugin().getInstance(Music.class)));
-        builder.addCommand("music", future -> new MusicCommand(musicManager, future.getPlugin().getBot()));
+        builder.addCommand("music", future -> new MusicCommand(
+                future.getPlugin().getInstance(Music.class), musicManager, future.getPlugin().getBot())
+        );
     }
 }

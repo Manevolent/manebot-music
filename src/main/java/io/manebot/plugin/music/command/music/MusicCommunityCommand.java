@@ -10,17 +10,21 @@ import io.manebot.command.executor.chained.argument.CommandArgumentPage;
 import io.manebot.command.executor.chained.argument.CommandArgumentString;
 import io.manebot.platform.Platform;
 import io.manebot.platform.PlatformConnection;
-import io.manebot.platform.PlatformManager;
+import io.manebot.plugin.music.Music;
 import io.manebot.plugin.music.database.model.Community;
 import io.manebot.plugin.music.database.model.CommunityAssociation;
 import io.manebot.plugin.music.database.model.MusicManager;
 import io.manebot.plugin.music.database.model.TrackRepository;
 
+import java.util.stream.Collectors;
+
 public class MusicCommunityCommand extends AnnotatedCommandExecutor {
+    private final Music music;
     private final MusicManager musicManager;
     private final Bot bot;
 
-    public MusicCommunityCommand(MusicManager musicManager, Bot bot) {
+    public MusicCommunityCommand(Music music, MusicManager musicManager, Bot bot) {
+        this.music = music;
         this.musicManager = musicManager;
         this.bot = bot;
     }
@@ -45,7 +49,30 @@ public class MusicCommunityCommand extends AnnotatedCommandExecutor {
         Community community = musicManager.getCommunityByName(name);
         if (community == null) throw new CommandArgumentException("Community not found.");
 
+        for (CommunityAssociation association : community.getAssociations())
+            association.delete();
+
         community.delete();
+    }
+
+    @Command(description = "Gets community information", permission = "music.community.info")
+    public void info(CommandSender sender,
+                     @CommandArgumentLabel.Argument(label = "info") String info) throws CommandExecutionException {
+        Community community = music.getCommunity(sender);
+        if (community == null) throw new CommandArgumentException("There is no community associated with this chat.");
+
+        sender.sendDetails(builder -> builder
+                .name("Community").key(community.getName())
+                .item("Repository", community.getRepository() != null ? community.getRepository().getName() : "(none)")
+                .item("Associations",
+                        community.getAssociations().stream()
+                                .map(assoc -> assoc.getPlatform().getId() + ":" + assoc.getId())
+                                .collect(Collectors.toList())
+                )
+                .item("Tracks", community.countTracks())
+                .item("Created", community.getCreatedDate())
+                .item("Updated", community.getUpdatedDate())
+        );
     }
 
     @Command(description = "Gets community information", permission = "music.community.info")
@@ -58,6 +85,11 @@ public class MusicCommunityCommand extends AnnotatedCommandExecutor {
         sender.sendDetails(builder -> builder
                 .name("Community").key(community.getName())
                 .item("Repository", community.getRepository() != null ? community.getRepository().getName() : "(none)")
+                .item("Associations",
+                        community.getAssociations().stream()
+                                .map(assoc -> assoc.getPlatform().getId() + ":" + assoc.getId())
+                                .collect(Collectors.toList())
+                )
                 .item("Tracks", community.countTracks())
                 .item("Created", community.getCreatedDate())
                 .item("Updated", community.getUpdatedDate())
