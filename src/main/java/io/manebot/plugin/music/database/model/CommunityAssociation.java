@@ -15,6 +15,10 @@ public class CommunityAssociation extends TimedRow {
     @Transient
     private final Database database;
 
+    public CommunityAssociation(Database database) {
+        this.database = database;
+    }
+
     public CommunityAssociation(Database database, Community community, Platform platform, String id) {
         this.database = database;
 
