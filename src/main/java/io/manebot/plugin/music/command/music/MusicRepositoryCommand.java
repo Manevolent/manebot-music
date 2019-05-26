@@ -49,7 +49,7 @@ public class MusicRepositoryCommand extends AnnotatedCommandExecutor {
         sender.sendDetails(builder -> builder
                 .name("Repository").key(repository.getName())
                 .item("Type", repository.getType())
-                .item("Format", repository.getFormat() == null ? "(none)" : repository.getFormat().toString())
+                .item("Format", repository.getFormat() == null ? "(default)" : repository.getFormat().toString())
                 .item("Files", repository.countFiles())
                 .item("Created", repository.getCreatedDate())
                 .item("Updated", repository.getUpdatedDate())

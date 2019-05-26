@@ -64,8 +64,8 @@ public final class MusicManager {
         return database.execute(s -> {
             return s.createQuery(
                     "SELECT c FROM " + CommunityAssociation.class.getName() + " x " +
-                            "INNER JOIN community c " +
-                            "INNER JOIN c.platform p " +
+                            "INNER JOIN x.community c " +
+                            "INNER JOIN x.platform p " +
                             "WHERE p.platformId = :platformId AND x.id = :id", Community.class)
                     .setParameter("platformId", platform.getPlatformId())
                     .setParameter("id", id)

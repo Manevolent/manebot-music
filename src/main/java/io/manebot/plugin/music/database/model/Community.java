@@ -68,24 +68,33 @@ public class Community extends TimedRow {
         });
     }
 
-    public Track createTrack(URL url, Consumer<Track.Builder> constructor) {
-        Track.Builder builder = new Track.DefaultBuilder(this, url);
-        constructor.accept(builder);
+    public Track getOrCreateTrack(URL url, Consumer<Track.Builder> constructor) {
+        Track track = getTrack(url);
+        if (track != null) {
+            return track; // shortcut
+        } else {
+            Track.Builder builder = new Track.DefaultBuilder(this, null, url);
+            constructor.accept(builder);
 
-        try {
-            return database.executeTransaction(s -> {
-                Track track = new Track(database);
-                track.setCommunity(builder.getCommunity());
-                track.setLength(builder.getLength());
-                track.setName(builder.getName());
-                s.persist(track);
+            try {
+                return database.executeTransaction(s -> {
+                    Track newTrack = new Track(
+                            database,
+                            builder.getUrl(),
+                            builder.getCommunity(),
+                            builder.getLength(),
+                            builder.getName()
+                    );
 
-                // TODO: tag track
+                    s.persist(newTrack);
 
-                return track;
-            });
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
+                    // TODO: tag track
+
+                    return newTrack;
+                });
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 
@@ -93,7 +102,7 @@ public class Community extends TimedRow {
         return database.execute(s -> {
             return s.createQuery(
                     "SELECT x FROM " + CommunityAssociation.class.getName() + " x " +
-                            "INNER JOIN community c " +
+                            "INNER JOIN x.community c " +
                             "WHERE c.communityId = :communityId", CommunityAssociation.class)
                     .setParameter("communityId", getCommunityId())
                     .getResultList();
@@ -104,7 +113,8 @@ public class Community extends TimedRow {
         return database.execute(s -> {
             return s.createQuery(
                     "SELECT x FROM " + CommunityAssociation.class.getName() + " x " +
-                            "WHERE x.platformId = :platformId AND x.id = :id", CommunityAssociation.class)
+                            "INNER JOIN x.platform p " +
+                            "WHERE p.platformId = :platformId AND x.id = :id", CommunityAssociation.class)
                     .setParameter("platformId", platform.getPlatformId())
                     .setParameter("id", id)
                     .getResultStream()

@@ -170,6 +170,12 @@ public class TrackRepository extends TimedRow {
                     Class clazz = Class.forName(getType());
                     instance = (Repository) clazz.getConstructor(TrackRepository.class).newInstance(this);
                 } catch (ReflectiveOperationException e) {
+                    throw new RuntimeException(
+                            "Problem instantiating TrackRepository instance for " +
+                            name
+                            + " (" + getType() + ")",
+                            e
+                    );
                 }
             }
         }
@@ -183,7 +189,8 @@ public class TrackRepository extends TimedRow {
 
     public long countFiles() {
         return database.execute(s -> (Long) s.createQuery(
-                "SELECT COUNT(x) FROM " + TrackFile.class.getName() + " x " +
+                "SELECT COUNT(x) " +
+                        "FROM " + TrackFile.class.getName() + " x " +
                         "INNER JOIN x.trackRepository c " +
                         "WHERE c.repositoryId = :repositoryId"
         ).setParameter("repositoryId", getRepositoryId()).getSingleResult());

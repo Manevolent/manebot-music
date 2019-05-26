@@ -16,6 +16,8 @@ import com.github.manevolent.ffmpeg4j.transcoder.Transcoder;
 
 import io.manebot.chat.Chat;
 import io.manebot.command.CommandSender;
+import io.manebot.command.exception.CommandArgumentException;
+import io.manebot.command.exception.CommandExecutionException;
 import io.manebot.conversation.Conversation;
 import io.manebot.database.model.Platform;
 import io.manebot.plugin.Plugin;
@@ -24,7 +26,9 @@ import io.manebot.plugin.audio.Audio;
 import io.manebot.plugin.audio.channel.AudioChannel;
 import io.manebot.plugin.audio.player.AudioPlayer;
 import io.manebot.plugin.audio.player.FFmpegAudioPlayer;
+import io.manebot.plugin.audio.player.ResampledAudioPlayer;
 import io.manebot.plugin.audio.player.TransitionedAudioPlayer;
+import io.manebot.plugin.audio.resample.FFmpegResampler;
 import io.manebot.plugin.music.api.DefaultMusicRegistration;
 import io.manebot.plugin.music.api.MusicRegistration;
 import io.manebot.plugin.music.config.AudioDownloadFormat;
@@ -45,6 +49,7 @@ import io.manebot.virtual.VirtualProcess;
 import org.apache.commons.io.IOUtils;
 import org.bytedeco.javacpp.avformat;
 
+import javax.sound.sampled.AudioFormat;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -74,7 +79,7 @@ public class Music implements PluginReference {
         // Default implementation
         createRegistration(plugin, builder -> {
             builder.registerRepository(FileRepository.class, FileRepository::new);
-            builder.registerRepository(NullRepository.class, trackRepository -> new NullRepository());
+            builder.registerRepository(NullRepository.class, NullRepository::new);
             builder.registerTrackSource(new YoutubeDLTrackSource(
                     plugin.getProperty("youtube-dl", "youtube-dl"),
                     Integer.parseInt(plugin.getProperty("timeout", "30"))
@@ -124,17 +129,23 @@ public class Music implements PluginReference {
                                 throw new RuntimeException(e);
                             }
                         }
-                ).filter(Objects::nonNull).max(
+                )
+                .filter(Objects::nonNull)
+                .sorted(
                         new Comparator<TrackSource.Result>() {
                             @Override
                             public int compare(TrackSource.Result a, TrackSource.Result b) {
                                 return Integer.compare(a.getPriority().getOrdinal(), b.getPriority().getOrdinal());
                             }
-                        }.reversed().thenComparingInt(x -> x.isLocal() ? 1 : 0)
-                ).orElseThrow(() -> new IllegalArgumentException(
-                        "url",
-                        new Exception("track not found: " + url.toExternalForm())
-                ));
+                        }.reversed().thenComparingInt(x -> x.isLocal() ? 0 : 1)
+                )
+                .findFirst()
+                .orElseThrow(() ->
+                        new IllegalArgumentException(
+                                "url",
+                                new Exception("track not found: " + url.toExternalForm())
+                        )
+                );
     }
 
     public TrackSource.Result findTrack(Community community, URL url) throws IOException {
@@ -158,23 +169,33 @@ public class Music implements PluginReference {
         return getCommunity(sender.getChat());
     }
 
-    public Track play(CommandSender sender, URL url) throws IOException, FFmpegException {
+    public int stop(CommandSender sender) {
+        throw new UnsupportedOperationException();
+    }
+
+    public Track play(CommandSender sender, URL url) throws IOException, FFmpegException,
+            CommandExecutionException {
         return play(sender, getCommunity(sender), url, (track) -> {});
     }
 
-    public Track play(CommandSender sender, Community community, URL url) throws IOException, FFmpegException {
+    public Track play(CommandSender sender, Community community, URL url) throws IOException, FFmpegException,
+            CommandExecutionException {
         return play(sender, community, url, (track) -> {});
     }
 
     public Track play(CommandSender sender, Community community, URL url, Consumer<Track> onFadeOut)
-            throws IOException, FFmpegException {
+            throws CommandExecutionException, IOException, FFmpegException {
+        if (community == null)
+            throw new CommandArgumentException("There is no music community associated with this conversation.");
+
         // Get the conversation associated with the command sender, the audio channel in turn associated with that chat,
         // and later lock it for this operation.
         final User user = sender.getUser();
         final Conversation conversation = sender.getConversation();
+
         AudioChannel channel = audio.getChannel(conversation);
         if (channel == null)
-            throw new IllegalStateException("There is no audio channel associated with this conversation.");
+            throw new CommandArgumentException("There is no audio channel associated with this conversation.");
 
         // Find track in the universe. Preferentially pulls a local database track, otherwise searches using
         // registered track sources.
@@ -322,12 +343,16 @@ public class Music implements PluginReference {
         } else copyRunnable = null;
 
         // Use FFmpeg4j to open the "direct" input stream and stream the file from the preferred source.
-        AudioPlayer basePlayer = FFmpegAudioPlayer.open(
-                AudioPlayer.Type.BLOCKING,
-                Virtual.getInstance().currentUser(),
-                inputFormat,
-                direct,
-                channel.getMixer().getBufferSize()
+        AudioPlayer basePlayer = ResampledAudioPlayer.wrap(
+                FFmpegAudioPlayer.open(
+                    AudioPlayer.Type.BLOCKING,
+                    Virtual.getInstance().currentUser(),
+                    inputFormat,
+                    direct,
+                    channel.getMixer().getBufferSize()
+                ),
+                channel.getMixer(),
+                new FFmpegResampler.FFmpegResamplerFactory()
         );
 
         final TrackAssociation association = new TrackAssociation(track, channel, basePlayer);

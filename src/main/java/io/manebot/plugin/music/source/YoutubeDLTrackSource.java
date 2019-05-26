@@ -3,17 +3,17 @@ package io.manebot.plugin.music.source;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.manebot.plugin.music.database.model.Community;
+import io.manebot.virtual.Virtual;
+import org.apache.commons.io.IOUtils;
 
-import java.io.BufferedReader;
-import java.io.IOException;
+import java.io.*;
 
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.net.*;
 
 import java.net.http.HttpTimeoutException;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 public class YoutubeDLTrackSource implements TrackSource {
@@ -52,6 +52,35 @@ public class YoutubeDLTrackSource implements TrackSource {
                 }
         );
 
+        class AsyncCopy implements Runnable {
+            private final CompletableFuture<byte[]> future = new CompletableFuture<>();
+            private final InputStream inputStream;
+
+            private AsyncCopy(InputStream inputStream) {
+                this.inputStream = inputStream;
+            }
+
+            @Override
+            public void run() {
+                ByteArrayOutputStream stdout_baos = new ByteArrayOutputStream();
+
+                try {
+                    IOUtils.copy(inputStream, stdout_baos);
+                    future.complete(stdout_baos.toByteArray());
+                } catch (Throwable e) {
+                    future.completeExceptionally(e);
+                }
+            }
+
+            private InputStream complete() {
+                return new ByteArrayInputStream(future.join());
+            }
+        }
+
+        AsyncCopy stdout_copy, stderr_copy;
+        Virtual.getInstance().create(stderr_copy = new AsyncCopy(process.getErrorStream())).start();
+        Virtual.getInstance().create(stdout_copy = new AsyncCopy(process.getInputStream())).start();
+
         // Wait up to the specified timeout to obtain metadata.
         try {
             if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
@@ -66,12 +95,14 @@ public class YoutubeDLTrackSource implements TrackSource {
             throw new IOException("interrupted waiting for youtube-dl process", e);
         }
 
+        InputStream stdout = stdout_copy.complete();
+        InputStream stderr = stderr_copy.complete();
+
         // A non-zero exit code will fail the download
         if (process.exitValue() != 0) {
             StringBuilder errorBuilder = new StringBuilder();
-            if (process.getErrorStream().available() > 0) {
-                try (BufferedReader reader =
-                             new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
+            if (stderr.available() > 0) {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(stderr))) {
                     String s = null;
 
                     while (reader.ready()) {
@@ -80,22 +111,22 @@ public class YoutubeDLTrackSource implements TrackSource {
                         errorBuilder.append(s).append(" ");
                     }
                 }
+
+                throw new IOException(
+                        trackUrl.toExternalForm(),
+                        new RuntimeException(
+                                "youtube-dl exited with code " + process.exitValue() + ": " + errorBuilder.toString()
+                        )
+                );
+            } else {
+                throw new IOException(
+                        trackUrl.toExternalForm(),
+                        new RuntimeException("youtube-dl exited with code " + process.exitValue())
+                );
             }
-
-            throw new IOException(
-                    trackUrl.toExternalForm(),
-                    new RuntimeException(
-                            "youtube-dl exited with code " + process.exitValue() + ": " +
-                            errorBuilder.toString())
-            );
         }
 
-        StringBuilder builder = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            String line;
-            while ((line = reader.readLine()) != null) builder.append(line);
-        }
-        return new JsonParser().parse(builder.toString()).getAsJsonObject();
+        return new JsonParser().parse(IOUtils.toString(stdout)).getAsJsonObject();
     }
 
     @Override

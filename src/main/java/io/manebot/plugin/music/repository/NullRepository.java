@@ -1,13 +1,14 @@
 package io.manebot.plugin.music.repository;
 
+import io.manebot.plugin.music.database.model.TrackRepository;
 import io.manebot.plugin.music.source.TrackSource;
 
 import java.io.*;
 import java.util.UUID;
 
 public class NullRepository extends AbstractRepository {
-    public NullRepository() {
-        super(null);
+    public NullRepository(TrackRepository repository) {
+        super(repository);
     }
 
     @Override

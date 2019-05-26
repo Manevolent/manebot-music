@@ -34,6 +34,15 @@ public class Track extends TimedRow {
         this.database = database;
     }
 
+
+    public Track(Database database, URL url, Community community, Double length, String name) {
+        this(database);
+        this.url = url.toExternalForm();
+        this.community = community;
+        this.length = length;
+        this.name = name;
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column()
@@ -215,6 +224,12 @@ public class Track extends TimedRow {
     public interface Builder {
 
         /**
+         * Gets the track associated with this builder, if one exists yet.
+         * @return track instance.
+         */
+        Track getTrack();
+
+        /**
          * Gets the community associated with this new track.
          * @return Community.
          */
@@ -276,14 +291,21 @@ public class Track extends TimedRow {
 
     public static class DefaultBuilder implements Builder {
         private final Community community;
+        private final Track track;
         private final Set<String> tags = new HashSet<>();
         private URL url;
         private Double length;
         private String name;
 
-        public DefaultBuilder(Community community, URL url) {
+        public DefaultBuilder(Community community, Track track, URL url) {
             this.community = community;
+            this.track = track;
             this.url = url;
+        }
+
+        @Override
+        public Track getTrack() {
+            return track;
         }
 
         @Override

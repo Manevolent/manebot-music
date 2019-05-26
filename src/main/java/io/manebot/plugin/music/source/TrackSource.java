@@ -111,7 +111,7 @@ public interface TrackSource {
             super(community,
                     url,
                     priority,
-                    selectedCommunity -> selectedCommunity.createTrack(url, constructor),
+                    selectedCommunity -> selectedCommunity.getOrCreateTrack(url, constructor),
                     chatCallable);
 
             this.format = format;
