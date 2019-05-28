@@ -2,10 +2,21 @@ package io.manebot.plugin.music.database.model;
 
 import io.manebot.conversation.Conversation;
 import io.manebot.database.Database;
+import io.manebot.database.expressions.ExtendedExpressions;
+import io.manebot.database.expressions.MatchMode;
 import io.manebot.database.model.TimedRow;
+import io.manebot.database.search.SearchArgument;
+import io.manebot.database.search.SearchHandler;
+import io.manebot.database.search.SearchOperator;
+import io.manebot.database.search.handler.*;
 import io.manebot.user.User;
+import io.manebot.virtual.Virtual;
 
 import javax.persistence.*;
+import javax.persistence.criteria.CriteriaBuilder;
+import javax.persistence.criteria.Path;
+import javax.persistence.criteria.Predicate;
+import javax.persistence.criteria.Root;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
@@ -22,7 +33,9 @@ import java.util.concurrent.Future;
                 @Index(columnList = "length"),
                 @Index(columnList = "likes"),
                 @Index(columnList = "dislikes"),
-                @Index(columnList = "plays")
+                @Index(columnList = "plays"),
+                @Index(columnList = "score"),
+                @Index(columnList = "userId")
         },
         uniqueConstraints = {@UniqueConstraint(columnNames ={"communityId","url"})}
 )
@@ -34,8 +47,7 @@ public class Track extends TimedRow {
         this.database = database;
     }
 
-
-    public Track(Database database, URL url, Community community, Double length, String name) {
+    public Track(Database database, URL url, Community community, Double length, String name, User user) {
         this(database);
         this.url = url.toExternalForm();
         this.community = community;
@@ -68,7 +80,14 @@ public class Track extends TimedRow {
     private int dislikes;
 
     @Column(nullable = false)
+    private int score;
+
+    @Column(nullable = false)
     private int plays;
+
+    @ManyToOne(optional = true)
+    @JoinColumn(name = "userId")
+    private io.manebot.database.model.User user;
 
     public int getTrackId() {
         return trackId;
@@ -150,6 +169,7 @@ public class Track extends TimedRow {
             this.likes = database.executeTransaction(s -> {
                 Track track = s.find(Track.class, getTrackId());
                 track.likes = likes;
+                track.score = track.likes - track.dislikes;
                 track.setUpdated(System.currentTimeMillis());
                 return likes;
             });
@@ -167,6 +187,7 @@ public class Track extends TimedRow {
             this.dislikes = database.executeTransaction(s -> {
                 Track track = s.find(Track.class, getTrackId());
                 track.dislikes = dislikes;
+                track.score = track.likes - track.dislikes;
                 track.setUpdated(System.currentTimeMillis());
                 return dislikes;
             });
@@ -214,6 +235,10 @@ public class Track extends TimedRow {
             }
         }).start();
         return future;
+    }
+
+    public io.manebot.database.model.User getUser() {
+        return user;
     }
 
     /**
@@ -287,6 +312,19 @@ public class Track extends TimedRow {
          */
         Builder setLength(Double seconds);
 
+        /**
+         * Gets the user associated with downloading this track.
+         * @return User instance.
+         */
+        User getUser();
+
+        /**
+         * Sets the user associated with downloading this track.
+         * @param user user to set.
+         * @return Builder instance for continuance.
+         */
+        Builder setUser(User user);
+
     }
 
     public static class DefaultBuilder implements Builder {
@@ -296,11 +334,13 @@ public class Track extends TimedRow {
         private URL url;
         private Double length;
         private String name;
+        private User user;
 
         public DefaultBuilder(Community community, Track track, URL url) {
             this.community = community;
             this.track = track;
             this.url = url;
+            this.user = Virtual.getInstance().currentUser();
         }
 
         @Override
@@ -359,5 +399,73 @@ public class Track extends TimedRow {
             this.length = seconds;
             return this;
         }
+
+        @Override
+        public User getUser() {
+            return user;
+        }
+
+        @Override
+        public Builder setUser(User user) {
+            this.user = user;
+            return this;
+        }
+    }
+
+    /**
+     * Creates a generic search handler for tracks.
+     * @param database database to create the handler on.
+     * @param community community to search by.
+     * @return SearchHandler instance.
+     */
+    public static SearchHandler<Track> createSearch(Database database, final Community community) {
+        return database.createSearchHandler(Track.class, (builder) -> {
+            builder.string(new SearchHandlerPropertyContains((root) -> root.get("name")));
+
+            builder.sort("date", root -> root.get("created")).defaultSort("date");
+            builder.sort("score", root -> root.get("score"));
+            builder.sort("dislikes", root -> root.get("dislikes"));
+            builder.sort("likes", root -> root.get("likes"));
+            builder.sort("plays", root -> root.get("plays"));
+            builder.sort("time", root -> root.get("length"));
+
+            builder.argument("score", new SearchHandlerPropertyNumeric("score"));
+            builder.argument("likes", new SearchHandlerPropertyNumeric("likes"));
+            builder.argument("dislikes", new SearchHandlerPropertyNumeric("dislikes"));
+            builder.argument("time", new SearchHandlerPropertyNumeric("length"));
+            builder.argument("plays", new SearchHandlerPropertyNumeric("plays"));
+            builder.argument("user", new ComparingSearchHandler(
+                    new SearchHandlerPropertyEquals(root -> root.get("user").get("username")),
+                    new SearchHandlerEntityProperty(root -> root.get("user").get("displayName")) {
+                        @SuppressWarnings("unchecked")
+                        @Override
+                        protected Predicate handle(Path path, CriteriaBuilder criteriaBuilder, SearchArgument value) {
+                            return ExtendedExpressions.escapedLike(
+                                    criteriaBuilder,
+                                    path,
+                                    value.getValue(),
+                                    MatchMode.START
+                            );
+                        }
+                    },
+                    SearchOperator.MERGE
+            ));
+
+            builder.command(new SearchHandlerPropertyIn(
+                    "trackId", /* trackId on Track */
+                    root -> root.get("track").get("trackId"), /* Track.trackId in TrackTag.track.trackId */
+                    TrackTag.class,
+                    new SearchHandlerPropertyEquals(root -> root.get("tag").get("name")) /* WHERE TrackTag.tag.name = name */
+            ));
+
+            builder.always((clause) -> {
+                clause.addPredicate(SearchOperator.MERGE, clause.getCriteriaBuilder().equal(
+                        clause.getRoot().get("community").get("communityId"),
+                        community.getCommunityId()
+                ));
+            });
+
+            return builder.build();
+        });
     }
 }

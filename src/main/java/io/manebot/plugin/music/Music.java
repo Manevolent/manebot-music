@@ -119,6 +119,8 @@ public class Music implements PluginReference {
     }
 
     public TrackSource.Result findRemoteTrack(Community community, URL url) throws IOException {
+        Objects.requireNonNull(community);
+
         return registrations.values().stream()
                 .flatMap(registration -> registration.getTrackSources().stream())
                 .map(
@@ -148,14 +150,20 @@ public class Music implements PluginReference {
                 );
     }
 
-    public TrackSource.Result findTrack(Community community, URL url) throws IOException {
+    public TrackSource.Result findLocalTrack(Community community, URL url) throws IOException {
         Objects.requireNonNull(community);
 
         TrackSource.Result databaseResult = getLocalTrackSource().find(community, url);
         if (databaseResult != null && databaseResult.get().exists())
             return databaseResult;
+        else return null;
+    }
 
-        return findRemoteTrack(community, url);
+    public TrackSource.Result findTrack(Community community, URL url) throws IOException {
+        TrackSource.Result result = findLocalTrack(community, url);
+        if (result == null)
+            result = findRemoteTrack(community, url);
+        return result;
     }
 
     public Community getCommunity(Chat chat) {

@@ -24,6 +24,8 @@ public class Entry implements PluginEntry {
             databaseBuilder.registerEntity(Track.class);
             databaseBuilder.registerEntity(TrackPlay.class);
             databaseBuilder.registerEntity(TrackFile.class);
+            databaseBuilder.registerEntity(Tag.class);
+            databaseBuilder.registerEntity(TrackTag.class);
         });
 
         Plugin audioPlugin = builder.requirePlugin(ManifestIdentifier.fromString("io.manebot.plugin:audio"));
@@ -38,7 +40,7 @@ public class Entry implements PluginEntry {
                 plugin -> new Music(plugin, musicManager, audioPlugin.getInstance(Audio.class))
         );
 
-        builder.addCommand("track", future -> new TrackCommand(future.getPlugin().getInstance(Music.class)));
+        builder.addCommand("track", future -> new TrackCommand(future.getPlugin().getInstance(Music.class), database));
         builder.addCommand("music", future -> new MusicCommand(
                 future.getPlugin().getInstance(Music.class), musicManager, future.getPlugin().getBot())
         );

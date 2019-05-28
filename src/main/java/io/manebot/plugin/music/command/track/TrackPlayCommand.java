@@ -20,7 +20,7 @@ public class TrackPlayCommand extends AnnotatedCommandExecutor {
         this.music = music;
     }
 
-    @Command(description = "Plays a track by its URL")
+    @Command(description = "Plays a track by its URL", permission = "music.track.play")
     public void play(CommandSender sender,
                      @CommandArgumentString.Argument(label = "URL") String urlString) throws CommandExecutionException {
         URL url;

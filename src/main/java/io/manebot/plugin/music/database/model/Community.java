@@ -83,7 +83,8 @@ public class Community extends TimedRow {
                             builder.getUrl(),
                             builder.getCommunity(),
                             builder.getLength(),
-                            builder.getName()
+                            builder.getName(),
+                            builder.getUser()
                     );
 
                     s.persist(newTrack);
