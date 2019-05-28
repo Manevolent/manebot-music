@@ -1,5 +1,6 @@
 package io.manebot.plugin.music.command.track;
 
+import io.manebot.chat.TextStyle;
 import io.manebot.command.CommandSender;
 import io.manebot.command.exception.CommandArgumentException;
 import io.manebot.command.exception.CommandExecutionException;
@@ -12,6 +13,7 @@ import io.manebot.plugin.music.database.model.Community;
 import io.manebot.plugin.music.database.model.Track;
 
 import java.sql.SQLException;
+import java.util.EnumSet;
 
 public class TrackSearchCommand extends AnnotatedCommandExecutor {
     private final Music music;
@@ -34,7 +36,7 @@ public class TrackSearchCommand extends AnnotatedCommandExecutor {
                     Track.class,
                     Track.createSearch(database, community).search(search, sender.getChat().getDefaultPageSize()),
                     (textBuilder, o) -> textBuilder
-                            .append(o.getName())
+                            .append("\"" + o.getName() + "\"", EnumSet.of(TextStyle.ITALICS))
                             .append(" (")
                             .appendUrl(o.getUrlString())
                             .append(") (")
