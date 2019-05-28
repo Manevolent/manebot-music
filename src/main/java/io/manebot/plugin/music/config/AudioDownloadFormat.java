@@ -31,22 +31,6 @@ public final class AudioDownloadFormat {
         return audioFormat;
     }
 
-    public void setContainerFormat(String containerFormat) {
-        this.container_format = containerFormat;
-    }
-
-    public void setAudioCodec(String audioCodec) {
-        this.codec = audioCodec;
-    }
-
-    public void setAudioBitrate(int audioBitrate) {
-        this.bitrate = audioBitrate;
-    }
-
-    public void setAudioFormat(AudioFormat audioFormat) {
-        this.audioFormat = audioFormat;
-    }
-
     @Override
     public String toString() {
         return audioFormat.toString() + " format=" + container_format + " codec=" + codec + " bitrate=" + bitrate;

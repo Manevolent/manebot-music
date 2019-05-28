@@ -469,15 +469,11 @@ public class Track extends TimedRow {
                     SearchOperator.MERGE
             ));
 
-            builder.command(new ComparingSearchHandler(
-                    new SearchHandlerPropertyIn(
-                        "trackId", /* trackId on Track */
-                        root -> root.get("track").get("trackId"), /* Track.trackId in TrackTag.track.trackId */
-                        TrackTag.class,
-                        new SearchHandlerPropertyEquals(root -> root.get("tag").get("name")) /* WHERE TrackTag.tag.name = name */
-                    ),
-                    new SearchHandlerPropertyEquals(root -> root.get("url")),
-                    SearchOperator.MERGE
+            builder.command(new SearchHandlerPropertyIn(
+                    "trackId", /* trackId on Track */
+                    root -> root.get("track").get("trackId"), /* Track.trackId in TrackTag.track.trackId */
+                    TrackTag.class,
+                    new SearchHandlerPropertyEquals(root -> root.get("tag").get("name")) /* WHERE TrackTag.tag.name = name */
             ));
 
             builder.always((clause) -> {
