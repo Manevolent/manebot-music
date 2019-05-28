@@ -16,7 +16,6 @@ import javax.persistence.*;
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.Path;
 import javax.persistence.criteria.Predicate;
-import javax.persistence.criteria.Root;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
@@ -139,6 +138,15 @@ public class Track extends TimedRow {
         }
     }
 
+    public String getTimeSignature() {
+        Double length = getLength();
+        if (length == null) return "(unknown)";
+        double durationD = length;
+        long minutes = (long) Math.floor(durationD / 60D);
+        long seconds = (long) Math.floor(durationD - (minutes * 60D));
+        return formatTimeComponent(minutes) + ":" + formatTimeComponent(seconds);
+    }
+
     public Community getCommunity() {
         return community;
     }
@@ -239,6 +247,16 @@ public class Track extends TimedRow {
 
     public io.manebot.database.model.User getUser() {
         return user;
+    }
+
+    public Collection<TrackTag> getTags() {
+        return database.execute(s -> {
+            return s.createQuery(
+                    "SELECT x FROM " + TrackTag.class.getName() +" x " +
+                            "WHERE x.track.trackId = :trackId",
+                    TrackTag.class
+            ).setParameter("trackId", getTrackId()).getResultList();
+        });
     }
 
     /**
@@ -451,11 +469,15 @@ public class Track extends TimedRow {
                     SearchOperator.MERGE
             ));
 
-            builder.command(new SearchHandlerPropertyIn(
-                    "trackId", /* trackId on Track */
-                    root -> root.get("track").get("trackId"), /* Track.trackId in TrackTag.track.trackId */
-                    TrackTag.class,
-                    new SearchHandlerPropertyEquals(root -> root.get("tag").get("name")) /* WHERE TrackTag.tag.name = name */
+            builder.command(new ComparingSearchHandler(
+                    new SearchHandlerPropertyIn(
+                        "trackId", /* trackId on Track */
+                        root -> root.get("track").get("trackId"), /* Track.trackId in TrackTag.track.trackId */
+                        TrackTag.class,
+                        new SearchHandlerPropertyEquals(root -> root.get("tag").get("name")) /* WHERE TrackTag.tag.name = name */
+                    ),
+                    new SearchHandlerPropertyEquals(root -> root.get("url")),
+                    SearchOperator.MERGE
             ));
 
             builder.always((clause) -> {
@@ -467,5 +489,15 @@ public class Track extends TimedRow {
 
             return builder.build();
         });
+    }
+
+
+    private static String formatTimeComponent(long n) {
+        assert n >= 0;
+
+        if (n < 10)
+            return "0" + n;
+        else
+            return Long.toString(n);
     }
 }

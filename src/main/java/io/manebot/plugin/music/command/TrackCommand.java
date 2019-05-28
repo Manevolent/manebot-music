@@ -9,7 +9,7 @@ import io.manebot.plugin.music.command.track.TrackSearchCommand;
 public class TrackCommand extends RoutedCommandExecutor {
     public TrackCommand(Music music, Database database) {
         route("search", new TrackSearchCommand(music, database)).alias("s");
-        route("play", new TrackPlayCommand(music)).asDefaultRoute();
+        route("play", new TrackPlayCommand(music, database)).asDefaultRoute();
     }
 
     @Override

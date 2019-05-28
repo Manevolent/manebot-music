@@ -6,6 +6,7 @@ import io.manebot.database.model.TimedRow;
 import io.manebot.database.model.User;
 
 import javax.persistence.*;
+import java.sql.SQLException;
 
 @Entity
 @Table(
@@ -66,5 +67,15 @@ public class TrackTag extends TimedRow {
 
     public User getUser() {
         return user;
+    }
+
+    public void delete() {
+        try {
+            database.executeTransaction(s -> {
+                s.remove(s.find(TrackTag.class, getTrackTagId()));
+            });
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

@@ -24,7 +24,7 @@ public class TrackSearchCommand extends AnnotatedCommandExecutor {
         this.database = database;
     }
 
-    @Command(description = "Searches tracks")
+    @Command(description = "Searches tracks", permission = "music.track.search")
     public void search(CommandSender sender, @CommandArgumentSearch.Argument Search search)
             throws CommandExecutionException {
         Community community = music.getCommunity(sender);

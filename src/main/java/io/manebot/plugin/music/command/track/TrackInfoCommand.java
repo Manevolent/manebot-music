@@ -1,12 +1,10 @@
 package io.manebot.plugin.music.command.track;
 
+import io.manebot.chat.TextStyle;
 import io.manebot.command.CommandSender;
 import io.manebot.command.exception.CommandArgumentException;
 import io.manebot.command.exception.CommandExecutionException;
 import io.manebot.command.executor.chained.AnnotatedCommandExecutor;
-import io.manebot.command.executor.chained.ChainPriority;
-import io.manebot.command.executor.chained.argument.CommandArgumentString;
-import io.manebot.command.executor.chained.argument.CommandArgumentURL;
 import io.manebot.command.search.CommandArgumentSearch;
 import io.manebot.database.Database;
 import io.manebot.database.search.Search;
@@ -14,36 +12,24 @@ import io.manebot.plugin.music.Music;
 import io.manebot.plugin.music.database.model.Community;
 import io.manebot.plugin.music.database.model.Track;
 
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
 import java.sql.SQLException;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.stream.Collectors;
 
-public class TrackPlayCommand extends AnnotatedCommandExecutor {
+public class TrackInfoCommand extends AnnotatedCommandExecutor {
     private final Music music;
     private final Database database;
 
-    public TrackPlayCommand(Music music, Database database) {
+    public TrackInfoCommand(Music music, Database database) {
         this.music = music;
         this.database = database;
     }
 
-    @Command(description = "Plays a track by its URL", permission = "music.track.play")
-    public void play(CommandSender sender,
-                     @CommandArgumentURL.Argument() URL url)
+    @Command(description = "Gets track information", permission = "music.track.info")
+    public void info(CommandSender sender, @CommandArgumentSearch.Argument Search search)
             throws CommandExecutionException {
-        try {
-            Track track = music.play(sender, url);
-            sender.sendMessage("(Playing \"" + track.getName() + "\")");
-        } catch (Exception e) {
-            throw new CommandExecutionException(e);
-        }
-    }
-
-    @Command(description = "Plays a track by its URL", permission = "music.track.play")
-    public void play(CommandSender sender,
-                     @CommandArgumentSearch.Argument() Search search) throws CommandExecutionException {
         Community community = music.getCommunity(sender);
         if (community == null)
             throw new CommandArgumentException("There is no music community associated with this conversation.");
@@ -62,11 +48,22 @@ public class TrackPlayCommand extends AnnotatedCommandExecutor {
             throw new CommandExecutionException(e);
         }
 
-        try {
-            track = music.play(sender, track.toURL());
-            sender.sendMessage("(Playing \"" + track.getName() + "\")");
-        } catch (Exception e) {
-            throw new CommandExecutionException(e);
-        }
+        sender.sendDetails(builder -> {
+            builder.key("Track").name(track.getName());
+            builder.item("User", track.getUser());
+            builder.item("URL", track.getUrlString());
+            builder.item("Duration", track.getTimeSignature());
+            builder.item("Plays", track.getPlays());
+            builder.item("Likes",
+                    track.getLikes() - track.getDislikes() +
+                    " (" + track.getLikes() + " likes | " + track.getDislikes() + " dislikes)"
+            );
+            builder.item("Tags",
+                    track.getTags().stream()
+                    .map(trackTag -> trackTag.getTag().getName())
+                    .distinct()
+                    .collect(Collectors.toList())
+            );
+        });
     }
 }
