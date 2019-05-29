@@ -23,7 +23,7 @@ track search
 
 Consider making **aliases** for these commands using the `alias` command itself:
 
-`alias search track search` = `search "videos with this in the title" page:2`
+`alias search track search` = `search "videos with this in the title" page:2`<br/>
 `alias track info i` = `i`
 
 ### stop
