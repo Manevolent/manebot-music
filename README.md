@@ -12,7 +12,13 @@ Please note that this plugin uses `youtube-dl` (https://rg3.github.io/youtube-dl
 The `track` command is used to manipluate tracks (e.g. YouTube videos, internet radio streams, twitch.tv livestreams)
 
 ```
+track info
+track info http://youtu.be/something
 track play http://youtu.be/something
+track play "videos with this in the title"
+track search "videos with this in the title"
+track search "videos with this in the title" page:2
+track search
 ```
 
 ### stop
