@@ -51,3 +51,19 @@ Tracks can be queried using long, well-formatted query strings. Internally, thes
 
 <img src="https://raw.githubusercontent.com/Manevolent/manebot-music/master/track_search_help_1.png">
 <img src="https://raw.githubusercontent.com/Manevolent/manebot-music/master/track_search_help_2.png">
+
+## Communities
+
+<img src="https://raw.githubusercontent.com/Manevolent/manebot-music/master/communities.png">
+
+**Music communities** in the `music` plugin are separate from *Communities* in Manebot, but they interact. This is so you can have multiple clusters of *Manebot* communities, connected individually to many *music* communities.  Or, connect them all to the same one!  It's up to you. As a refresher, a *Manebot* community is something like a Discord guild, or a Teamspeak server. Manebot automatically divides your guilds, servers, and MUCs into their own communities and assigns them identifiers unique to the platform they are associated with. You can use these identifiers to associate a Manebot community to its own music community; check out `music community` (`help music community`) for more information.
+
+The primary purpose of music communities is to isolate track metadata, like titles, likes, plays, and so forth. This also helps isolate the suggestion/playlist engine from other communities, providing what each community wants more of when they shuffle their tracks.
+
+## Repositories
+
+<img src="https://raw.githubusercontent.com/Manevolent/manebot-music/master/repositories.png">
+
+**Repositories** can associate to a music community to provide a backing store for *finite* tracks (sorry, Twitch.tv livestreams can't be stored). Planned repository storage targets are basic filesystem and NAS/NFS.
+
+You can also use leverage the repository heirarchy to replicate your precious track data across sources, as well, in case you were worried about losing your *memories*.
