@@ -66,4 +66,6 @@ The primary purpose of music communities is to isolate track metadata, like titl
 
 **Repositories** can associate to a music community to provide a backing store for *finite* tracks (sorry, Twitch.tv livestreams can't be stored). Planned repository storage targets are basic filesystem and NAS/NFS.
 
+**By default**, the *nul* repository is used; this means that, while Track metadata (titles, and such) are kept in the Manebot database, no audio information (samples) are stored locally.
+
 You can also use leverage the repository heirarchy to replicate your precious track data across sources, as well, in case you were worried about losing your *memories*.
