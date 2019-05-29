@@ -29,3 +29,10 @@ playlist info
 playlist start tag
 playlist start "videos with this in the title" -tag
 ```
+
+## Track queries
+
+Tracks can be queried using long, well-formatted query strings. Internally, these queries are converted into SQL with the Hibernate criteria API.
+
+<img src="https://raw.githubusercontent.com/Manevolent/manebot-music/master/track_search_help_1.png">
+<img src="https://raw.githubusercontent.com/Manevolent/manebot-music/master/track_search_help_2.png">
