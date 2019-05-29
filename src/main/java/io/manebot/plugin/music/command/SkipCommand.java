@@ -5,16 +5,14 @@ import io.manebot.command.exception.CommandAccessException;
 import io.manebot.command.exception.CommandArgumentException;
 import io.manebot.command.exception.CommandExecutionException;
 import io.manebot.command.executor.CommandExecutor;
-import io.manebot.plugin.Plugin;
-import io.manebot.plugin.PluginRegistration;
 import io.manebot.plugin.audio.Audio;
 import io.manebot.plugin.audio.channel.AudioChannel;
 import io.manebot.plugin.music.Music;
 
-public class StopCommand implements CommandExecutor {
+public class SkipCommand implements CommandExecutor {
     private final Music music;
 
-    public StopCommand(Music music) {
+    public SkipCommand(Music music) {
         this.music = music;
     }
 

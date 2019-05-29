@@ -30,6 +30,11 @@ public interface TrackQueue extends Iterator<Track> {
      * Peeks at the next videos in the playlist queue.
      * @return immutable Track collection following the current track.
      */
-    Collection<Track> peek();
+    Track peek();
+
+    /**
+     * Gets the estimated size of this queue. For unbounded/unknown queues, -1 is returned.
+     */
+    long size();
 
 }

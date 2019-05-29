@@ -63,14 +63,14 @@
         <dependency>
             <groupId>io.manebot</groupId>
             <artifactId>manebot-core</artifactId>
-            <version>0.1.6.32</version>
+            <version>0.1.6.33</version>
             <scope>provided</scope>
         </dependency>
 
         <dependency>
             <groupId>io.manebot.plugin</groupId>
             <artifactId>audio</artifactId>
-            <version>0.1.9.27</version>
+            <version>0.1.9.28</version>
             <scope>provided</scope>
         </dependency>
 

@@ -1,6 +1,7 @@
 package io.manebot.plugin.music.database.model;
 
 import io.manebot.chat.Chat;
+import io.manebot.conversation.Conversation;
 import io.manebot.database.Database;
 import io.manebot.database.model.Platform;
 import io.manebot.plugin.music.repository.NullRepository;
@@ -118,6 +119,26 @@ public final class MusicManager {
         return database.execute(s -> {
             return s.createQuery("SELECT x FROM " + TrackRepository.class.getName() + " x", TrackRepository.class)
                     .getResultList();
+        });
+    }
+
+    public Track getLastPlayed(Conversation conversation) {
+        return database.execute(s -> {
+            return s.createQuery(
+                    "SELECT t FROM " + TrackPlay.class.getName() + " x " +
+                    "INNER JOIN x.track t " +
+                    "INNER JOIN x.conversation c " +
+                    "WHERE c.conversationId = :conversationId AND x.created > :oldest " +
+                    "ORDER BY x.end DESC", Track.class)
+                    .setParameter(
+                            "conversationId",
+                            ((io.manebot.database.model.Conversation)conversation).getConversationId()
+                    )
+                    .setParameter(
+                            "oldest",
+                            System.currentTimeMillis() - (60 * 1000L * 5L)
+                    )
+                    .getResultStream().findFirst().orElse(null);
         });
     }
 }

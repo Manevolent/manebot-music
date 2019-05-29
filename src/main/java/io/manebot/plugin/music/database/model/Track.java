@@ -226,6 +226,11 @@ public class Track extends TimedRow {
             return database.executeTransaction(s -> {
                 TrackPlay trackPlay = new TrackPlay(database, this, conversation, user, start, end);
                 s.persist(trackPlay);
+
+                Track track = s.find(Track.class, getTrackId());
+                track.setUpdated(System.currentTimeMillis());
+                track.likes ++;
+
                 return trackPlay;
             });
         } catch (SQLException e) {
@@ -476,12 +481,10 @@ public class Track extends TimedRow {
                     new SearchHandlerPropertyEquals(root -> root.get("tag").get("name")) /* WHERE TrackTag.tag.name = name */
             ));
 
-            builder.always((clause) -> {
-                clause.addPredicate(SearchOperator.MERGE, clause.getCriteriaBuilder().equal(
-                        clause.getRoot().get("community").get("communityId"),
-                        community.getCommunityId()
-                ));
-            });
+            builder.always((clause) -> clause.addPredicate(SearchOperator.MERGE, clause.getCriteriaBuilder().equal(
+                    clause.getRoot().get("community").get("communityId"),
+                    community.getCommunityId()
+            )));
 
             return builder.build();
         });

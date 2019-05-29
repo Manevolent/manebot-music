@@ -28,9 +28,9 @@ public class TrackInfoCommand extends AnnotatedCommandExecutor {
 
     @Command(description = "Gets track information", permission = "music.track.info")
     public void info(CommandSender sender) throws CommandExecutionException {
-        Track track = null; //TODO
+        Track track = music.getPlayedTrack(sender.getConversation());
         if (track == null)
-            throw new CommandArgumentException("Track not found.");
+            throw new CommandArgumentException("No tracks were played on this channel recently.");
 
         info(sender, track);
     }
@@ -75,7 +75,7 @@ public class TrackInfoCommand extends AnnotatedCommandExecutor {
     private void info(CommandSender sender, Track track) throws CommandExecutionException {
         sender.sendDetails(builder -> {
             builder.name("Track").key(track.getName());
-            builder.item("User", track.getUser());
+            builder.item("Downloaded", "by " + track.getUser() + " on " + track.getCreatedDate().toString());
             builder.item("URL", track.getUrlString());
             builder.item("Duration", track.getTimeSignature());
             builder.item("Plays", track.getPlays());
