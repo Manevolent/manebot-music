@@ -13,18 +13,19 @@ track play http://youtu.be/something
 
 ### stop
 
-Stops your track, if you have the right to do so.
-
-(Coming soon)
+Stops your track or playlist, if you have the right to do so.
 
 ### next/skip
 
 Skips to the next track in a playlist
 
-(Coming soon)
+### playlist
 
-### playlist (or p)
+Starts a playlist using a *query*, and manages a running playlist.
 
-Starts a playlist using a query
-
-(Coming soon)
+```
+playlist
+playlist info
+playlist start tag
+playlist start "videos with this in the title" -tag
+```
