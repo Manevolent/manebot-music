@@ -21,11 +21,16 @@ track search "videos with this in the title" page:2
 track search
 ```
 
+Consider making **aliases** for these commands using the `alias` command itself:
+
+`alias search track search` = `search "videos with this in the title" page:2`
+`alias track info i` = `i`
+
 ### stop
 
 Stops your track or playlist, if you have the right to do so.
 
-### next/skip
+### skip
 
 Skips to the next track in a playlist
 
