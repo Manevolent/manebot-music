@@ -136,7 +136,7 @@ public final class MusicManager {
                     )
                     .setParameter(
                             "oldest",
-                            System.currentTimeMillis() - (60 * 1000L * 5L)
+                            (int)((System.currentTimeMillis() - (60 * 1000L * 5L))/1000)
                     )
                     .getResultStream().findFirst().orElse(null);
         });

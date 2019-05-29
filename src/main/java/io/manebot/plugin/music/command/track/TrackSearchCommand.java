@@ -36,7 +36,7 @@ public class TrackSearchCommand extends AnnotatedCommandExecutor {
                     Track.class,
                     Track.createSearch(database, community).search(search, sender.getChat().getDefaultPageSize()),
                     (textBuilder, o) -> textBuilder
-                            .append("\"" + o.getName() + "\"", EnumSet.of(TextStyle.ITALICS))
+                            .append("\"" + o.getName() + "\"")
                             .append(" (")
                             .appendUrl(o.getUrlString())
                             .append(") (")

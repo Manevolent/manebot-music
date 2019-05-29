@@ -18,6 +18,7 @@ import com.google.common.collect.Queues;
 import io.manebot.chat.Chat;
 import io.manebot.command.CommandSender;
 import io.manebot.conversation.Conversation;
+import io.manebot.database.Database;
 import io.manebot.database.model.Platform;
 import io.manebot.database.search.Search;
 import io.manebot.database.search.SearchResult;
@@ -69,6 +70,7 @@ import java.util.stream.StreamSupport;
 
 public class Music implements PluginReference {
     private final Plugin plugin;
+    private final Database database;
     private final MusicManager musicManager;
     private final DatabaseTrackSource localTrackSource;
     private final Audio audio;
@@ -77,8 +79,9 @@ public class Music implements PluginReference {
     private final Map<AudioChannel, Play> playingTracks = new LinkedHashMap<>();
     private final Map<AudioChannel, Playlist> playlists = new LinkedHashMap<>();
 
-    public Music(Plugin plugin, MusicManager manager, Audio audio) {
+    public Music(Plugin plugin, Database database, MusicManager manager, Audio audio) {
         this.plugin = plugin;
+        this.database = database;
         this.musicManager = manager;
         this.localTrackSource = new DatabaseTrackSource(this);
         this.audio = audio;
@@ -770,7 +773,7 @@ public class Music implements PluginReference {
 
         @Override
         public TrackQueue from(Search search) {
-            throw new UnsupportedOperationException();
+            return new SearchedTrackQueue(database, search);
         }
     }
 }

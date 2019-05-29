@@ -66,14 +66,13 @@ public class TrackPlayCommand extends AnnotatedCommandExecutor {
             throw new CommandExecutionException(e);
         }
 
-        Track track = null;
+        Track track;
+
         try {
             track = music.play(sender.getPlatformUser().getAssociation(), sender.getConversation(), builder ->
                     builder.setTrack(trackSelector -> trackSelector.find(searchResult)).setExclusive(true)
             ).getTrack();
-        } catch (IOException e) {
-            throw new CommandExecutionException(e);
-        } catch (FFmpegException e) {
+        } catch (IOException | FFmpegException e) {
             throw new CommandExecutionException(e);
         }
 

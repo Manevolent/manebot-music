@@ -3,6 +3,7 @@ package io.manebot.plugin.music.database.model;
 import io.manebot.database.Database;
 import io.manebot.database.model.Platform;
 import io.manebot.database.model.TimedRow;
+import io.manebot.database.model.User;
 
 import javax.persistence.*;
 import java.net.URL;
@@ -77,7 +78,7 @@ public class Community extends TimedRow {
             constructor.accept(builder);
 
             try {
-                return database.executeTransaction(s -> {
+                track = database.executeTransaction(s -> {
                     Track newTrack = new Track(
                             database,
                             builder.getUrl(),
@@ -89,13 +90,29 @@ public class Community extends TimedRow {
 
                     s.persist(newTrack);
 
-                    // TODO: tag track
+                    for (String tagName : builder.getTags()) {
+                        Tag tag = s.createQuery(
+                                "SELECT x FROM " + Tag.class.getName() + " x " +
+                                "WHERE x.name = :name",
+                                Tag.class
+                        ).setParameter("name", tagName).setMaxResults(1)
+                                .getResultStream().findFirst().orElse(null);
+
+                        if (tag == null) {
+                            tag = new Tag(database, tagName, (User) builder.getUser());
+                            s.persist(tag);
+                        }
+
+                        s.persist(new TrackTag(database, newTrack, tag, builder.getUser()));
+                    }
 
                     return newTrack;
                 });
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
+
+            return track;
         }
     }
 

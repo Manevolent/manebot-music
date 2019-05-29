@@ -1,9 +1,7 @@
 package io.manebot.plugin.music;
 
 import io.manebot.conversation.Conversation;
-import io.manebot.database.search.Search;
 import io.manebot.database.search.SearchResult;
-import io.manebot.lambda.ThrowingFunction;
 import io.manebot.plugin.audio.channel.AudioChannel;
 import io.manebot.plugin.audio.player.AudioPlayer;
 import io.manebot.plugin.music.database.model.Community;
@@ -11,7 +9,6 @@ import io.manebot.plugin.music.database.model.Track;
 import io.manebot.plugin.music.source.TrackSource;
 import io.manebot.user.UserAssociation;
 
-import java.io.IOException;
 import java.net.URL;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -111,8 +108,8 @@ public class Play {
 
         /**
          * Sets the "fade out" listener, fired when the track fades out.
-         * @param fadeOut
-         * @return
+         * @param fadeOut fade out callback.
+         * @return Builder for continuance.
          */
         Builder setFadeOut(Consumer<Track> fadeOut);
 

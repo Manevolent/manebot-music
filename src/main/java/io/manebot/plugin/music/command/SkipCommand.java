@@ -7,7 +7,10 @@ import io.manebot.command.exception.CommandExecutionException;
 import io.manebot.command.executor.CommandExecutor;
 import io.manebot.plugin.audio.Audio;
 import io.manebot.plugin.audio.channel.AudioChannel;
+import io.manebot.plugin.audio.player.AudioPlayer;
 import io.manebot.plugin.music.Music;
+import io.manebot.plugin.music.playlist.Playlist;
+import io.manebot.security.Permission;
 
 public class SkipCommand implements CommandExecutor {
     private final Music music;
@@ -20,17 +23,24 @@ public class SkipCommand implements CommandExecutor {
     public void execute(CommandSender sender, String label, String[] args) throws CommandExecutionException {
         Audio audio = music.getAudio();
         AudioChannel channel = audio.requireListening(sender);
-        if (channel.isIdle()) throw new CommandArgumentException("Cannot stop this channel.");
+        if (channel.isIdle()) throw new CommandArgumentException("Cannot skip this channel.");
 
-        int stopped = music.stop(sender.getPlatformUser().getAssociation(), channel);
-        if (stopped <= 0) {
-            throw new CommandAccessException("None of your messages are playing.");
-        } else {
-            if (stopped == 1)
-                sender.sendMessage("Stopped " + stopped + " track.");
-            else
-                sender.sendMessage("Stopped " + stopped + " tracks.");
+        Playlist playlist = music.getPlaylist(channel);
+        if (playlist.isRunning() && playlist.peek() == playlist.getCurrent())
+            throw new CommandArgumentException("Cannot skip this playlist.");
+
+        boolean override = Permission.hasPermission("audio.stop.all");
+
+        int stopped = 0;
+        for (AudioPlayer player : channel.getPlayers()) {
+            if (!player.isPlaying()) continue;
+
+            if (player.getOwner() == null || player.getOwner().equals(sender.getUser()) || override)
+                if (player.stop()) stopped++;
         }
+
+        if (stopped <= 0)
+            throw new CommandAccessException("None of your messages are playing.");
     }
 
     @Override

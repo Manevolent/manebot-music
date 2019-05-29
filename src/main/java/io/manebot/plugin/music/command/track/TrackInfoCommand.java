@@ -75,13 +75,17 @@ public class TrackInfoCommand extends AnnotatedCommandExecutor {
     private void info(CommandSender sender, Track track) throws CommandExecutionException {
         sender.sendDetails(builder -> {
             builder.name("Track").key(track.getName());
-            builder.item("Downloaded", "by " + track.getUser() + " on " + track.getCreatedDate().toString());
+            builder.item("Downloaded",
+                    (track.getUser() != null ? "by " + track.getUser() + " on " : "")
+                    + track.getCreatedDate().toString()
+            );
             builder.item("URL", track.getUrlString());
-            builder.item("Duration", track.getTimeSignature());
+            if (track.getLength() != null) builder.item("Duration", track.getTimeSignature());
             builder.item("Plays", track.getPlays());
             builder.item("Likes",
                     track.getLikes() - track.getDislikes() +
-                            " (" + track.getLikes() + " likes | " + track.getDislikes() + " dislikes)"
+                            (track.getLikes() != 0 || track.getDislikes() != 0 ?
+                                    " (" + track.getLikes() + " likes | " + track.getDislikes() + " dislikes)" : "")
             );
             builder.item("Tags",
                     track.getTags().stream()

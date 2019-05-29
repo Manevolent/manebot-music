@@ -7,10 +7,7 @@ import io.manebot.plugin.PluginException;
 import io.manebot.plugin.PluginType;
 import io.manebot.plugin.audio.Audio;
 import io.manebot.plugin.java.PluginEntry;
-import io.manebot.plugin.music.command.MusicCommand;
-import io.manebot.plugin.music.command.PlaylistCommand;
-import io.manebot.plugin.music.command.StopCommand;
-import io.manebot.plugin.music.command.TrackCommand;
+import io.manebot.plugin.music.command.*;
 import io.manebot.plugin.music.database.model.*;
 
 public class Entry implements PluginEntry {
@@ -39,14 +36,19 @@ public class Entry implements PluginEntry {
 
         builder.setInstance(
                 Music.class,
-                plugin -> new Music(plugin, musicManager, audioPlugin.getInstance(Audio.class))
+                plugin -> new Music(plugin, database, musicManager, audioPlugin.getInstance(Audio.class))
         );
-
-        builder.addCommand("playlist", future -> new PlaylistCommand(future.getPlugin().getInstance(Music.class), database));
+        builder.addCommand("playlist", future -> new PlaylistCommand(
+                future.getPlugin().getInstance(Music.class),
+                database
+        ));
         builder.addCommand("stop", future -> new StopCommand(future.getPlugin().getInstance(Music.class)));
+        builder.addCommand("skip", future -> new SkipCommand(future.getPlugin().getInstance(Music.class)));
         builder.addCommand("track", future -> new TrackCommand(future.getPlugin().getInstance(Music.class), database));
         builder.addCommand("music", future -> new MusicCommand(
-                future.getPlugin().getInstance(Music.class), musicManager, future.getPlugin().getBot())
-        );
+                future.getPlugin().getInstance(Music.class),
+                musicManager,
+                future.getPlugin().getBot()
+        ));
     }
 }
