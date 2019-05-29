@@ -62,7 +62,7 @@ public class TrackInfoCommand extends AnnotatedCommandExecutor {
                     .getResults()
                     .stream()
                     .reduce((a, b) -> {
-                        throw new IllegalStateException("Query ambiguation: more than 1 result found");
+                        throw new IllegalArgumentException("More than 1 result found.");
                     })
                     .orElseThrow(() -> new CommandArgumentException("No results found."));
         } catch (SQLException e) {

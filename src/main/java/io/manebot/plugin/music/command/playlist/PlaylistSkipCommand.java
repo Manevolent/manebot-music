@@ -1,4 +1,4 @@
-package io.manebot.plugin.music.command;
+package io.manebot.plugin.music.command.playlist;
 
 import io.manebot.command.CommandSender;
 import io.manebot.command.exception.CommandAccessException;
@@ -12,10 +12,10 @@ import io.manebot.plugin.music.Music;
 import io.manebot.plugin.music.playlist.Playlist;
 import io.manebot.security.Permission;
 
-public class SkipCommand implements CommandExecutor {
+public class PlaylistSkipCommand implements CommandExecutor {
     private final Music music;
 
-    public SkipCommand(Music music) {
+    public PlaylistSkipCommand(Music music) {
         this.music = music;
     }
 

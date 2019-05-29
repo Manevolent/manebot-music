@@ -16,7 +16,9 @@ import com.github.manevolent.ffmpeg4j.transcoder.Transcoder;
 
 import com.google.common.collect.Queues;
 import io.manebot.chat.Chat;
+import io.manebot.chat.TextStyle;
 import io.manebot.command.CommandSender;
+import io.manebot.command.exception.CommandAccessException;
 import io.manebot.conversation.Conversation;
 import io.manebot.database.Database;
 import io.manebot.database.model.Platform;
@@ -287,7 +289,7 @@ public class Music implements PluginReference {
         return stopped;
     }
 
-    public Playlist createPlaylist(UserAssociation userAssociation, Conversation conversation,
+    public Playlist startPlaylist(UserAssociation userAssociation, Conversation conversation,
                                   Consumer<Playlist.Builder> consumer) {
         Community community = getCommunity(conversation);
         if (community == null)
@@ -305,7 +307,70 @@ public class Music implements PluginReference {
 
         consumer.accept(builder);
 
-        return builder.create();
+        builder.addListener(new Playlist.Listener() {
+            @Override
+            public void onStarted(Playlist playlist) {
+                if (playlist.getUser() != null)
+                    playlist.getConversation().getChat().sendFormattedMessage(
+                            textBuilder ->
+                                    textBuilder.append(
+                                            playlist.getUser().getUser().getDisplayName(),
+                                            EnumSet.of(TextStyle.BOLD)
+                                    ).append(" has started a playlist in this conversation.")
+                    );
+            }
+
+            @Override
+            public void onTrackChanged(Playlist playlist, Track track) {
+                playlist.getConversation().getChat().sendFormattedMessage(
+                        textBuilder -> textBuilder.append("(Playing \"" + track.getName() + "\")")
+                );
+            }
+
+            @Override
+            public void onTransferred(Playlist playlist, UserAssociation a, UserAssociation b) {
+                if (a != null && b != null)
+                    playlist.getConversation().getChat().sendFormattedMessage(
+                            textBuilder ->
+                                    textBuilder.append(
+                                            a.getUser().getDisplayName() + "'s",
+                                            EnumSet.of(TextStyle.BOLD)
+                                    ).append(" playlist has ben transferred to ").append(
+                                            a.getUser().getDisplayName(),
+                                            EnumSet.of(TextStyle.BOLD)
+                                    ).append(".")
+                    );
+            }
+
+            @Override
+            public void onStopped(Playlist playlist) {
+                if (playlist.getUser() != null)
+                    playlist.getConversation().getChat().sendFormattedMessage(
+                            textBuilder ->
+                                    textBuilder.append(
+                                            playlist.getUser().getUser().getDisplayName() + "'s",
+                                            EnumSet.of(TextStyle.BOLD)
+                                    ).append(" playlist has ended.")
+                    );
+            }
+        });
+
+        Playlist playlist = builder.create();
+
+        try (AudioChannel.Ownership ownership = channel.obtainChannel(userAssociation)) {
+            stop(userAssociation, channel);
+
+            if (getPlaylist(channel) != null)
+                throw new CommandAccessException("There is another playlist running on this channel.");
+
+            playlist.setRunning(true);
+
+            playlists.put(channel, playlist);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        return playlist;
     }
 
     public Play play(UserAssociation user, Conversation conversation, Consumer<Play.Builder> consumer)
@@ -729,7 +794,7 @@ public class Music implements PluginReference {
 
         @Override
         public Playlist.Builder setQueue(Function<Playlist.QueueSelector, TrackQueue> function) {
-            return setQueue(function.apply(new QueueSelector()));
+            return setQueue(function.apply(new QueueSelector(community)));
         }
 
         @Override
@@ -751,6 +816,12 @@ public class Music implements PluginReference {
     }
 
     private class QueueSelector implements Playlist.QueueSelector {
+        private final Community community;
+
+        private QueueSelector(Community community) {
+            this.community = community;
+        }
+
         @Override
         public TrackQueue from(Iterable<Track> queue, boolean loop) {
             if (loop) {
@@ -773,7 +844,7 @@ public class Music implements PluginReference {
 
         @Override
         public TrackQueue from(Search search) {
-            return new SearchedTrackQueue(database, search);
+            return new SearchedTrackQueue(database, community, search);
         }
     }
 }

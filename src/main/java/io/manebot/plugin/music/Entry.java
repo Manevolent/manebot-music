@@ -8,6 +8,7 @@ import io.manebot.plugin.PluginType;
 import io.manebot.plugin.audio.Audio;
 import io.manebot.plugin.java.PluginEntry;
 import io.manebot.plugin.music.command.*;
+import io.manebot.plugin.music.command.playlist.PlaylistSkipCommand;
 import io.manebot.plugin.music.database.model.*;
 
 public class Entry implements PluginEntry {
@@ -43,7 +44,7 @@ public class Entry implements PluginEntry {
                 database
         ));
         builder.addCommand("stop", future -> new StopCommand(future.getPlugin().getInstance(Music.class)));
-        builder.addCommand("skip", future -> new SkipCommand(future.getPlugin().getInstance(Music.class)));
+        builder.addCommand("skip", future -> new PlaylistSkipCommand(future.getPlugin().getInstance(Music.class)));
         builder.addCommand("track", future -> new TrackCommand(future.getPlugin().getInstance(Music.class), database));
         builder.addCommand("music", future -> new MusicCommand(
                 future.getPlugin().getInstance(Music.class),

@@ -83,9 +83,11 @@ public class DefaultPlaylist implements Playlist {
         if (this.running != running) {
             this.running = running;
 
-            if (running)
+            if (running) {
+                next();
+
                 listeners.forEach(listener -> listener.onStarted(this));
-            else
+            } else
                 listeners.forEach(listener -> listener.onStopped(this));
 
             return true;

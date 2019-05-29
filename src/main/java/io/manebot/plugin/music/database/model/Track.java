@@ -229,7 +229,7 @@ public class Track extends TimedRow {
 
                 Track track = s.find(Track.class, getTrackId());
                 track.setUpdated(System.currentTimeMillis());
-                track.likes ++;
+                track.plays ++;
 
                 return trackPlay;
             });

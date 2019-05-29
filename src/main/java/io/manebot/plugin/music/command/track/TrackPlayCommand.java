@@ -51,7 +51,7 @@ public class TrackPlayCommand extends AnnotatedCommandExecutor {
         sender.sendMessage("(Playing \"" + track.getName() + "\")");
     }
 
-    @Command(description = "Plays a track by its URL", permission = "music.track.play")
+    @Command(description = "Plays a track by a query", permission = "music.track.play")
     public void play(CommandSender sender,
                      @CommandArgumentSearch.Argument() Search search) throws CommandExecutionException {
         Community community = music.getCommunity(sender);
