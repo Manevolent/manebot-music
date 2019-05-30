@@ -8,7 +8,6 @@ import io.manebot.plugin.audio.player.AudioPlayer;
 import io.manebot.plugin.music.Music;
 import io.manebot.plugin.music.database.model.Community;
 import io.manebot.plugin.music.database.model.Track;
-import io.manebot.user.User;
 import io.manebot.user.UserAssociation;
 
 import java.util.Collection;

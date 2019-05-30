@@ -44,7 +44,7 @@
 
     <groupId>io.manebot.plugin</groupId>
     <artifactId>music</artifactId>
-    <version>1.0.2.5</version>
+    <version>1.0.2.15</version>
 
     <build>
         <plugins>
@@ -70,7 +70,7 @@
         <dependency>
             <groupId>io.manebot.plugin</groupId>
             <artifactId>audio</artifactId>
-            <version>0.1.9.30</version>
+            <version>0.1.10.12</version>
             <scope>provided</scope>
         </dependency>
 

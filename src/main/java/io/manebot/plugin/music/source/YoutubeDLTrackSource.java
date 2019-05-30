@@ -15,6 +15,9 @@ import java.net.http.HttpTimeoutException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
+import java.util.zip.DeflaterInputStream;
+import java.util.zip.GZIPInputStream;
 
 public class YoutubeDLTrackSource implements TrackSource {
     private final String executablePath;
@@ -139,13 +142,10 @@ public class YoutubeDLTrackSource implements TrackSource {
         JsonObject response = getJsonMetadata(url);
 
         // track url
-        String urlString = response.has("url") ? response.get("url").getAsString() : url.toExternalForm();
-        final URL realUrl;
-        try {
-            realUrl = new URI(urlString).toURL();
-        } catch (URISyntaxException e) {
-            throw new IOException(e);
-        }
+        String urlString = response.has("webpage_url") ?
+                response.get("webpage_url").getAsString() : url.toExternalForm();
+
+        final URL realUrl = new URL(urlString);
 
         // track title
         String title = response.has("fulltitle") ?
@@ -156,7 +156,7 @@ public class YoutubeDLTrackSource implements TrackSource {
 
         Double duration;
 
-        if (response.has("duration"))
+        if (response.has("duration") && response.get("duration").getAsDouble() > 0)
             duration = response.get("duration").getAsDouble();
         else
             duration = null; // pod-cast? live video?
@@ -166,7 +166,7 @@ public class YoutubeDLTrackSource implements TrackSource {
         if (!response.has("formats") || response.get("formats").isJsonNull()) {
             if (response.get("direct").getAsBoolean()) {
                 FormatOption formatOption = new FormatOption(
-                        url,
+                        url.toExternalForm(),
                         0L,
                         0D,
                         0D,
@@ -191,34 +191,40 @@ public class YoutubeDLTrackSource implements TrackSource {
                 JsonObject object = x.getAsJsonObject();
                 if (!object.has("url") || object.get("url").isJsonNull()) return;
 
-                try {
-                    FormatOption formatOption = new FormatOption(
-                            URI.create(object.get("url").getAsString().trim()).toURL(),
-                            object.has("filesize") && !object.get("filesize").isJsonNull() ?
-                                    object.get("filesize").getAsLong() : 0,
-                            object.has("abr") && !object.get("abr").isJsonNull() ?
-                                    object.get("abr").getAsDouble() : 0D,
-                            object.has("vbr") && !object.get("vbr").isJsonNull() ?
-                                    object.get("vbr").getAsDouble() : 0D,
-                            object.has("ext") && !object.get("ext").isJsonNull() ?
-                                    object.get("ext").getAsString().trim() : null,
-                            object.has("format_note") && !object.get("format_note").isJsonNull() ?
-                                    object.get("format_note").getAsString().trim() : null,
-                            object.has("acodec") && !object.get("acodec").isJsonNull() ?
-                                    object.get("acodec").getAsString().trim() : null,
-                            object.has("vcodec") && !object.get("vcodec").isJsonNull() ?
-                                    object.get("vcodec").getAsString().trim() : null
-                    );
+                String downloadUrl = object.get("url").getAsString();
 
-                    if (object.has("http_headers"))
-                        object.getAsJsonObject("http_headers").entrySet()
-                                .forEach(y -> formatOption.getHttpHeaders().put(y.getKey(), y.getValue().getAsString()));
+                String format;
 
-                    formatOptions.add(formatOption);
-                } catch (MalformedURLException e) {
-                    // continue
-                    return;
-                }
+                if (object.has("format_note") && object.get("format_note").getAsString().equalsIgnoreCase("hls"))
+                    downloadUrl = "hls+" + downloadUrl;
+
+                if (object.has("ext") && !object.get("ext").isJsonNull())
+                    format = object.get("ext").getAsString().trim();
+                else
+                    format = null;
+
+                FormatOption formatOption = new FormatOption(
+                        downloadUrl,
+                        object.has("filesize") && !object.get("filesize").isJsonNull() ?
+                                object.get("filesize").getAsLong() : 0,
+                        object.has("abr") && !object.get("abr").isJsonNull() ?
+                                object.get("abr").getAsDouble() : 0D,
+                        object.has("vbr") && !object.get("vbr").isJsonNull() ?
+                                object.get("vbr").getAsDouble() : 0D,
+                        format,
+                        object.has("format_note") && !object.get("format_note").isJsonNull() ?
+                                object.get("format_note").getAsString().trim() : null,
+                        object.has("acodec") && !object.get("acodec").isJsonNull() ?
+                                object.get("acodec").getAsString().trim() : null,
+                        object.has("vcodec") && !object.get("vcodec").isJsonNull() ?
+                                object.get("vcodec").getAsString().trim() : null
+                );
+
+                if (object.has("http_headers"))
+                    object.getAsJsonObject("http_headers").entrySet()
+                            .forEach(y -> formatOption.getHttpHeaders().put(y.getKey(), y.getValue().getAsString()));
+
+                formatOptions.add(formatOption);
             });
         }
 
@@ -249,30 +255,17 @@ public class YoutubeDLTrackSource implements TrackSource {
 
         return new DownloadResult(
                 community,
-                url,
-                selectedFormat.extension,
+                realUrl,
+                selectedFormat.format,
                 ResultPriority.LOW,
                 (builder) -> {
                     // this code will set the attributes of a new track, if one is needed to recognize this URL.
                     builder.setName(title);
                     builder.setLength(duration);
                     builder.setUrl(realUrl);
-                }
-        ) {
-            @Override
-            public InputStream openDirect() throws IOException {
-                HttpURLConnection urlConnection = (HttpURLConnection) format.getUrl().openConnection();
-                urlConnection.setUseCaches(true);
-                urlConnection.setInstanceFollowRedirects(true);
-                urlConnection.setRequestMethod("GET");
-                for (Map.Entry<String, String> header : format.getHttpHeaders().entrySet())
-                    urlConnection.setRequestProperty(header.getKey(), header.getValue());
-                int responseCode = urlConnection.getResponseCode();
-                if (responseCode / 100 != 2)
-                    throw new IOException(responseCode + ": " + urlConnection.getResponseMessage());
-                return urlConnection.getInputStream();
-            }
-        };
+                },
+                file -> file.open(format.getUrl(), null, format.getHttpHeaders())
+        );
     }
 
     /**
@@ -285,20 +278,20 @@ public class YoutubeDLTrackSource implements TrackSource {
         private final long filesize;
         private final double audio_efficiency;
         private final double video_efficiency;
-        private final URL url;
-        private final String extension,note,audioCodec,videoCodec;
+        private final String url;
+        private final String format,note,audioCodec,videoCodec;
         private final Map<String, String> httpHeaders = new HashMap<>();
 
-        FormatOption(URL url,
+        FormatOption(String url,
                      long filesize,
                      double audio_bitrate, double video_bitrate,
-                     String extension, String note,
+                     String format, String note,
                      String audioCodec, String videoCodec) {
             this.audio_bitrate = audio_bitrate;
             this.video_bitrate = video_bitrate;
 
             this.filesize = filesize;
-            this.extension = extension;
+            this.format = format;
             this.audioCodec = audioCodec;
             this.videoCodec = videoCodec;
 
@@ -328,11 +321,11 @@ public class YoutubeDLTrackSource implements TrackSource {
         public long getFilesize() {
             return filesize;
         }
-        public URL getUrl() {
+        public String getUrl() {
             return url;
         }
-        public String getExtension() {
-            return extension;
+        public String getFormat() {
+            return format;
         }
         public String getNote() {
             return note;

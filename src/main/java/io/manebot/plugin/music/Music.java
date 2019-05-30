@@ -1,18 +1,6 @@
 package io.manebot.plugin.music;
 
-import com.github.manevolent.ffmpeg4j.FFmpeg;
 import com.github.manevolent.ffmpeg4j.FFmpegException;
-import com.github.manevolent.ffmpeg4j.FFmpegIO;
-import com.github.manevolent.ffmpeg4j.FFmpegInput;
-import com.github.manevolent.ffmpeg4j.filter.audio.AudioFilter;
-import com.github.manevolent.ffmpeg4j.filter.audio.AudioFilterNone;
-import com.github.manevolent.ffmpeg4j.filter.audio.FFmpegAudioResampleFilter;
-import com.github.manevolent.ffmpeg4j.filter.video.VideoFilterNone;
-import com.github.manevolent.ffmpeg4j.source.AudioSourceSubstream;
-import com.github.manevolent.ffmpeg4j.source.MediaSourceSubstream;
-import com.github.manevolent.ffmpeg4j.stream.output.FFmpegTargetStream;
-import com.github.manevolent.ffmpeg4j.stream.source.FFmpegSourceStream;
-import com.github.manevolent.ffmpeg4j.transcoder.Transcoder;
 
 import com.google.common.collect.Queues;
 import io.manebot.chat.Chat;
@@ -29,14 +17,16 @@ import io.manebot.plugin.Plugin;
 import io.manebot.plugin.PluginReference;
 import io.manebot.plugin.audio.Audio;
 import io.manebot.plugin.audio.channel.AudioChannel;
+
+import io.manebot.plugin.audio.mixer.input.AudioProvider;
+import io.manebot.plugin.audio.mixer.input.ResampledAudioProvider;
 import io.manebot.plugin.audio.player.AudioPlayer;
-import io.manebot.plugin.audio.player.FFmpegAudioPlayer;
-import io.manebot.plugin.audio.player.ResampledAudioPlayer;
+
 import io.manebot.plugin.audio.player.TransitionedAudioPlayer;
 import io.manebot.plugin.audio.resample.FFmpegResampler;
+import io.manebot.plugin.audio.resample.ResamplerFactory;
 import io.manebot.plugin.music.api.DefaultMusicRegistration;
 import io.manebot.plugin.music.api.MusicRegistration;
-import io.manebot.plugin.music.config.AudioDownloadFormat;
 import io.manebot.plugin.music.database.model.Community;
 import io.manebot.plugin.music.database.model.MusicManager;
 import io.manebot.plugin.music.database.model.Track;
@@ -44,26 +34,15 @@ import io.manebot.plugin.music.playlist.*;
 import io.manebot.plugin.music.repository.FileRepository;
 import io.manebot.plugin.music.repository.NullRepository;
 import io.manebot.plugin.music.repository.Repository;
-import io.manebot.plugin.music.source.DatabaseTrackSource;
-import io.manebot.plugin.music.source.TrackSource;
-import io.manebot.plugin.music.source.YoutubeDLTrackSource;
-import io.manebot.plugin.music.util.SplittableInputStream;
+import io.manebot.plugin.music.source.*;
 import io.manebot.security.Permission;
 import io.manebot.user.User;
 import io.manebot.user.UserAssociation;
 import io.manebot.user.UserType;
-import io.manebot.virtual.Virtual;
-import io.manebot.virtual.VirtualProcess;
-import org.apache.commons.io.IOUtils;
-import org.bytedeco.javacpp.avformat;
 
-import java.io.EOFException;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.URL;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -76,6 +55,9 @@ public class Music implements PluginReference {
     private final MusicManager musicManager;
     private final DatabaseTrackSource localTrackSource;
     private final Audio audio;
+
+    private final AudioProtocol protocol = new FFmpegAudioProtocol(10D);
+    private final ResamplerFactory resamplerFactory = new FFmpegResampler.FFmpegResamplerFactory();
 
     private final Map<Plugin, MusicRegistration> registrations = new LinkedHashMap<>();
     private final Map<AudioChannel, Play> playingTracks = new LinkedHashMap<>();
@@ -419,6 +401,14 @@ public class Music implements PluginReference {
         });
     }
 
+    public AudioProtocol getProtocol() {
+        return protocol;
+    }
+
+    public ResamplerFactory getResamplerFactory() {
+        return resamplerFactory;
+    }
+
     private class PlayBuilder implements Play.Builder {
         private final UserAssociation userAssociation;
         private final Community community;
@@ -506,215 +496,87 @@ public class Music implements PluginReference {
             // This is a somewhat complicated process. We must check to see if the resource exists. If it doesn't exist on
             // the Repository associated with the "community" parameter, we should cache it only if that Repository supports
             // writing to this Track's associated resource. If it does exist, we shouldn't save it to the cache twice.
-            InputStream direct;
-            String format;
-            if (resource.exists()) {
-                direct = resource.openRead();
-                format = resource.getFormat();
-            } else {
-                if (!downloading) throw new IllegalStateException("cannot download track: downloading was not allowed");
-
-                direct = result.openDirect();
-                format = result.getFormat();
-            }
-
-            // (attempt to) get input format from FFmpeg
-            avformat.AVInputFormat inputFormat = FFmpeg.getInputFormatByName(format);
-
-            // If we are saving this to the cache, we should wrap/shadow the "direct" stream with an async copy stream.
-            // If the length is undefined, we cannot cache this track.
-            Runnable copyRunnable;
-
-            if (caching && !resource.exists() && resource.canWrite() && track.getLength() != null) {
-                SplittableInputStream splitter = new SplittableInputStream(direct);
-                direct = splitter;
-
-                final InputStream split = splitter.split();
-                final OutputStream target = resource.openWrite();
-                CompletableFuture<Boolean> future = new CompletableFuture<>();
-
-                copyRunnable = () -> {
-                    FFmpegInput input = null;
-                    FFmpegIO output = null;
-
-                    try {
-                        AudioDownloadFormat downloadFormat = resource.getRepository().getDownloadFormat();
-                        if (downloadFormat != null) {
-                            FFmpegSourceStream sourceStream;
-
-                            try {
-                                input = new FFmpegInput(split);
-                                sourceStream = input.open(inputFormat);
-                                sourceStream.registerStreams();
-                            } catch (Exception ex) {
-                                throw new FFmpegException(ex);
-                            }
-
-                            try {
-                                output = FFmpegIO.openOutputStream(target, FFmpegIO.DEFAULT_BUFFER_SIZE);
-                            } catch (Exception ex) {
-                                throw new FFmpegException(ex);
-                            }
-
-                            FFmpegTargetStream targetStream = new FFmpegTargetStream(
-                                    downloadFormat.getContainerFormat(),
-                                    output,
-                                    new FFmpegTargetStream.FFmpegNativeOutput()
-                            );
-
-                            AudioSourceSubstream defaultAudioSubstream =
-                                    (AudioSourceSubstream)
-                                            sourceStream.getSubstreams().stream()
-                                                    .filter(x -> x instanceof AudioSourceSubstream)
-                                                    .findFirst().orElse(null);
-
-                            AudioFilter audioFilter = new AudioFilterNone();
-                            if (defaultAudioSubstream != null &&
-                                    downloadFormat.getAudioCodec() != null &&
-                                    downloadFormat.getAudioBitrate() > 0) {
-                                targetStream.registerAudioSubstream(
-                                        downloadFormat.getAudioCodec(),
-                                        downloadFormat.getAudioFormat().toFFmpeg(),
-                                        Collections.singletonMap("b", Integer.toString(downloadFormat.getAudioBitrate()))
-                                );
-
-                                if (!downloadFormat.getAudioFormat().toFFmpeg().equals(defaultAudioSubstream.getFormat())) {
-                                    audioFilter = new FFmpegAudioResampleFilter(
-                                            defaultAudioSubstream.getFormat(),
-                                            downloadFormat.getAudioFormat().toFFmpeg(),
-                                            FFmpegAudioResampleFilter.DEFAULT_BUFFER_SIZE
-                                    );
-                                }
-                            }
-
-                            for (MediaSourceSubstream substream : sourceStream.getSubstreams()) {
-                                if (substream != defaultAudioSubstream) substream.setDecoding(false);
-                            }
-
-                            try {
-                                new Transcoder(
-                                        sourceStream,
-                                        targetStream,
-                                        audioFilter,
-                                        new VideoFilterNone(), /* ignored */
-                                        2D
-                                ).transcode();
-                            } catch (EOFException eof) {
-                                // ignore
-                            }
-
-                            future.complete(true);
-                        } else {
-                            // Download format doesn't specify a specific target format; simple copy
-                            IOUtils.copy(split, target);
-                        }
-                    } catch (Throwable e) {
-                        try {
-                            if (input != null) input.close();
-                        } catch (Exception e2) {
-                            e.addSuppressed(e2);
-                        }
-
-                        try {
-                            if (output != null) output.close();
-                        } catch (Exception e2) {
-                            e.addSuppressed(e2);
-                        }
-
-                        try {
-                            if (target != null) target.close();
-                        } catch (Exception e2) {
-                            e.addSuppressed(e2);
-                        }
-
-                        try {
-                            resource.delete();
-                        } catch (Exception e2) {
-                            e.addSuppressed(e2);
-                        }
-
-                        future.completeExceptionally(e);
-                    }
-                };
-            } else copyRunnable = null;
-
-            // Use FFmpeg4j to open the "direct" input stream and stream the file from the preferred source.
-            AudioPlayer basePlayer = ResampledAudioPlayer.wrap(
-                    FFmpegAudioPlayer.open(
-                            AudioPlayer.Type.BLOCKING,
-                            Virtual.getInstance().currentUser(),
-                            inputFormat,
-                            direct,
-                            channel.getMixer().getBufferSize()
-                    ),
-                    channel.getMixer(),
-                    new FFmpegResampler.FFmpegResamplerFactory()
-            );
-
-            final Play association = new Play(Music.this, track, channel, conversation, basePlayer);
+            AudioProtocol protocol = getProtocol();
+            AudioProvider provider;
+            if (resource.exists())
+                provider = protocol.open(resource.openRead(), resource.getFormat());
+            else if (!downloading)
+                throw new IllegalStateException("cannot stream track: streaming/downloading was not allowed");
+            else
+                provider = result.openDirect(protocol);
 
             try {
+                // resample on an as-needed basis
+                if (provider.getChannels() != getChannel().getMixer().getAudioChannels() ||
+                        provider.getSampleRate() != getChannel().getMixer().getAudioSampleRate())
+                    provider = new ResampledAudioProvider(
+                            provider,
+                            getChannel().getMixer().getBufferSize(),
+                            resamplerFactory.create(
+                                    provider.getFormat(),
+                                    getChannel().getMixer().getAudioFormat(),
+                                    getChannel().getMixer().getBufferSize()
+                            )
+                    );
+
+                AudioPlayer player = new TransitionedAudioPlayer(
+                        AudioPlayer.Type.BLOCKING,
+                        userAssociation.getUser(),
+                        provider,
+                        track.getLength() == null ? Double.MAX_VALUE : track.getLength(),
+                        track.getLength() == null ? 3D : Math.min(track.getLength() / 4D, 3D),
+                        new TransitionedAudioPlayer.Callback() {
+                            @Override
+                            public void onFadeIn() {
+                                // do nothing
+                            }
+
+                            @Override
+                            public void onFadeOut() {
+                                fadeOut.accept(track);
+                            }
+
+                            @Override
+                            public void onFinished(double timePlayedInSeconds) {
+                                double end = System.currentTimeMillis() / 1000D;
+
+                                if (userAssociation.getUser().getType() == UserType.ANONYMOUS) return;
+
+                                // clamp time played
+                                if (track.getLength() != null)
+                                    timePlayedInSeconds = Math.max(
+                                            0D,
+                                            Math.min(timePlayedInSeconds, track.getLength())
+                                    );
+
+                                double start = end - timePlayedInSeconds;
+                                track.addPlayAsync(conversation, userAssociation.getUser(), start, end);
+                            }
+                        }
+                );
+
+                final Play play = new Play(Music.this, track, channel, conversation, player);
+
                 try (AudioChannel.Ownership ownership = channel.obtainChannel(userAssociation)) {
                     if (exclusive) stop(userAssociation, channel);
 
-                    AudioPlayer player = new TransitionedAudioPlayer(
-                            basePlayer,
-                            track.getLength() == null ? Double.MAX_VALUE : track.getLength(),
-                            track.getLength() == null ? 3D : Math.min(track.getLength() / 4D, 3D),
-                            new TransitionedAudioPlayer.Callback() {
-                                @Override
-                                public void onFadeIn() {
-                                    playingTracks.put(channel, association);
-                                }
-
-                                @Override
-                                public void onFadeOut() {
-                                    fadeOut.accept(track);
-                                }
-
-                                @Override
-                                public void onFinished(double timePlayedInSeconds) {
-                                    double end = System.currentTimeMillis() / 1000D;
-
-                                    playingTracks.remove(channel, association);
-
-                                    if (userAssociation.getUser().getType() == UserType.ANONYMOUS) return;
-
-                                    // clamp time played
-                                    if (track.getLength() != null)
-                                        timePlayedInSeconds = Math.max(
-                                                0D,
-                                                Math.min(timePlayedInSeconds, track.getLength())
-                                        );
-
-                                    double start = end - timePlayedInSeconds;
-                                    track.addPlayAsync(conversation, userAssociation.getUser(), start, end);
-                                }
-                            }
-                    );
-
-                    channel.addPlayer(player);
-
-                    if (copyRunnable != null) {
-                        VirtualProcess currentProcess = Virtual.getInstance().currentProcess();
-                        if (currentProcess != null)
-                            currentProcess.newThreadFactory().newThread(copyRunnable).start();
-                        else
-                            new Thread(copyRunnable).start();
-                    }
+                    if (channel.addPlayer(player)) {
+                        playingTracks.put(channel, play);
+                        player.getFuture().thenRun(() -> playingTracks.remove(channel, play));
+                    } else throw new IllegalStateException();
                 }
-            } catch (Exception e) {
+
+                return play;
+            } catch (Throwable e) {
                 // prevent leak:
                 try {
-                    basePlayer.close();
+                    provider.close();
                 } catch (Exception ex) {
                     // ignore
                 }
 
                 throw new IOException(e);
             }
-
-            return association;
         }
     }
 

@@ -2,13 +2,14 @@ package io.manebot.plugin.music.source;
 
 import io.manebot.command.CommandSender;
 
+import io.manebot.lambda.ThrowingFunction;
+import io.manebot.plugin.audio.mixer.input.AudioProvider;
 import io.manebot.plugin.music.database.model.Community;
 import io.manebot.plugin.music.database.model.Track;
 import io.manebot.plugin.music.database.model.TrackRepository;
 import io.manebot.plugin.music.repository.Repository;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URL;
 
 import java.util.Objects;
@@ -47,6 +48,7 @@ public interface TrackSource {
         private final Community community;
         private final URL url;
         private final ResultPriority priority;
+        private final Function<AudioProtocol, AudioProvider> open;
         private final Function<Community, Track> trackFunction;
         private final Consumer<CommandSender> chatCallable;
 
@@ -56,12 +58,14 @@ public interface TrackSource {
                       URL url,
                       ResultPriority priority,
                       Function<Community, Track> trackFunction,
+                      ThrowingFunction<AudioProtocol, AudioProvider, IOException> open,
                       Consumer<CommandSender> chatCallable) {
             this.community = community;
             this.url = url;
             this.priority = priority;
             this.trackFunction = trackFunction;
             this.chatCallable = chatCallable;
+            this.open = open;
         }
 
         public Community getCommunity() {
@@ -82,8 +86,8 @@ public interface TrackSource {
 
         public abstract String getFormat();
 
-        public InputStream openDirect() throws IOException {
-            return getUrl().openStream();
+        public AudioProvider openDirect(AudioProtocol file) {
+            return open.apply(file);
         }
 
         public Repository.Resource get() throws IOException {
@@ -107,11 +111,13 @@ public interface TrackSource {
                               String format,
                               ResultPriority priority,
                               Consumer<Track.Builder> constructor,
+                              ThrowingFunction<AudioProtocol, AudioProvider, IOException> open,
                               Consumer<CommandSender> chatCallable) {
             super(community,
                     url,
                     priority,
                     selectedCommunity -> selectedCommunity.getOrCreateTrack(url, constructor),
+                    open,
                     chatCallable);
 
             this.format = format;
@@ -121,8 +127,10 @@ public interface TrackSource {
                               URL url,
                               String format,
                               ResultPriority priority,
-                              Consumer<Track.Builder> constructor) {
-            this(community, url, format, priority, constructor, sender -> sender.sendMessage("(Downloading track)"));
+                              Consumer<Track.Builder> constructor,
+                              ThrowingFunction<AudioProtocol, AudioProvider, IOException> open) {
+            this(community, url, format, priority, constructor, open,
+                    sender -> sender.sendMessage("(Downloading track)"));
         }
 
         @Override

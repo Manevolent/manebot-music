@@ -71,7 +71,7 @@ public class Track extends TimedRow {
     private String name;
 
     @Column(nullable = true)
-    private Double length;
+    private Double length = null;
 
     @Column(nullable = false)
     private int likes;
