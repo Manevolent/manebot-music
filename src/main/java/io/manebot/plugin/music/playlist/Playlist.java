@@ -87,7 +87,9 @@ public interface Playlist extends TrackQueue {
         Community getCommunity();
         Conversation getConversation();
         AudioChannel getChannel();
+        UserAssociation getUser();
 
+        Builder setUser(UserAssociation user);
         Builder setQueue(TrackQueue queue);
         Builder setQueue(Function<QueueSelector, TrackQueue> function);
         Builder addListener(Listener listener);

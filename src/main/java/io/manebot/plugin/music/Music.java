@@ -289,8 +289,11 @@ public class Music implements PluginReference {
         return stopped;
     }
 
-    public Playlist startPlaylist(UserAssociation userAssociation, Conversation conversation,
+    public Playlist startPlaylist(UserAssociation userAssociation,
+                                  Conversation conversation,
                                   Consumer<Playlist.Builder> consumer) {
+        Objects.requireNonNull(userAssociation);
+
         Community community = getCommunity(conversation);
         if (community == null)
             throw new IllegalArgumentException("There is no music community associated with this conversation.");
@@ -304,6 +307,8 @@ public class Music implements PluginReference {
                 conversation,
                 channel
         );
+
+        builder.setUser(userAssociation);
 
         consumer.accept(builder);
 
@@ -352,6 +357,8 @@ public class Music implements PluginReference {
                                             EnumSet.of(TextStyle.BOLD)
                                     ).append(" playlist has ended.")
                     );
+
+                playlists.remove(playlist.getChannel(), playlist);
             }
         });
 
@@ -485,6 +492,7 @@ public class Music implements PluginReference {
         }
 
         private Play play() throws IOException, FFmpegException {
+            Objects.requireNonNull(userAssociation);
             Objects.requireNonNull(result);
 
             // Get the track. This may actually create a track, if needed.
@@ -753,6 +761,7 @@ public class Music implements PluginReference {
         private final AudioChannel channel;
         private final List<Playlist.Listener> listeners = new LinkedList<>();
 
+        private UserAssociation user;
         private TrackQueue queue = null;
 
         private PlaylistBuilder(Community community, Conversation conversation, AudioChannel channel) {
@@ -787,6 +796,17 @@ public class Music implements PluginReference {
         }
 
         @Override
+        public UserAssociation getUser() {
+            return user;
+        }
+
+        @Override
+        public Playlist.Builder setUser(UserAssociation user) {
+            this.user = user;
+            return this;
+        }
+
+        @Override
         public Playlist.Builder setQueue(TrackQueue queue) {
             this.queue = queue;
             return this;
@@ -806,6 +826,7 @@ public class Music implements PluginReference {
         private Playlist create() {
             return new DefaultPlaylist(
                     getMusic(),
+                    user,
                     getCommunity(),
                     getConversation(),
                     getChannel(),

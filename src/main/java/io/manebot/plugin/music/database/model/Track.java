@@ -23,6 +23,7 @@ import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
+import java.util.function.Consumer;
 
 @javax.persistence.Entity
 @Table(
@@ -115,7 +116,7 @@ public class Track extends TimedRow {
 
     public URL toURL() {
         try {
-            return URI.create(getUrlString()).toURL();
+            return new URL(getUrlString());
         } catch (MalformedURLException e) {
             throw new RuntimeException(e);
         }
@@ -435,13 +436,18 @@ public class Track extends TimedRow {
         }
     }
 
+    public static SearchHandler<Track> createSearch(Database database, final Community community) {
+        return createSearch(database, community, (clause) -> {});
+    }
+
     /**
      * Creates a generic search handler for tracks.
      * @param database database to create the handler on.
      * @param community community to search by.
      * @return SearchHandler instance.
      */
-    public static SearchHandler<Track> createSearch(Database database, final Community community) {
+    public static SearchHandler<Track> createSearch(Database database, final Community community,
+                                                    Consumer<SearchHandler.Clause<Track>> always) {
         return database.createSearchHandler(Track.class, (builder) -> {
             builder.string(new SearchHandlerPropertyContains((root) -> root.get("name")));
 
@@ -481,10 +487,16 @@ public class Track extends TimedRow {
                     new SearchHandlerPropertyEquals(root -> root.get("tag").get("name")) /* WHERE TrackTag.tag.name = name */
             ));
 
-            builder.always((clause) -> clause.addPredicate(SearchOperator.MERGE, clause.getCriteriaBuilder().equal(
-                    clause.getRoot().get("community").get("communityId"),
-                    community.getCommunityId()
-            )));
+            builder.always((clause) -> {
+
+                clause.addPredicate(SearchOperator.MERGE, clause.getCriteriaBuilder().equal(
+                        clause.getRoot().get("community").get("communityId"),
+                        community.getCommunityId()
+                ));
+
+                always.accept(clause);
+
+            });
 
             return builder.build();
         });

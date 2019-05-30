@@ -30,12 +30,14 @@ public class DefaultPlaylist implements Playlist {
     private boolean running = false;
 
     public DefaultPlaylist(Music music,
+                           UserAssociation userAssociation,
                            Community community,
                            Conversation conversation,
                            AudioChannel channel,
                            TrackQueue queue,
                            List<Listener> listeners) {
         this.music = music;
+        this.userAssociation = userAssociation;
         this.community = community;
         this.conversation = conversation;
         this.channel = channel;
@@ -84,11 +86,12 @@ public class DefaultPlaylist implements Playlist {
             this.running = running;
 
             if (running) {
-                next();
-
                 listeners.forEach(listener -> listener.onStarted(this));
-            } else
+                next();
+            } else {
+                getPlayers().forEach(AudioPlayer::kill);
                 listeners.forEach(listener -> listener.onStopped(this));
+            }
 
             return true;
         }
@@ -104,6 +107,7 @@ public class DefaultPlaylist implements Playlist {
     @Override
     public void transferToUser(UserAssociation userAssociation) throws SecurityException {
         if (this.userAssociation != userAssociation) {
+            listeners.forEach(listener -> listener.onTransferred(this, this.userAssociation, userAssociation));
             this.userAssociation = userAssociation;
         }
     }
@@ -119,6 +123,7 @@ public class DefaultPlaylist implements Playlist {
         }
 
         try {
+            Track oldTrack = this.track;
             this.track = Objects.requireNonNull(queue.next());
 
             Play play = music.play(getUser(), getConversation(), builder -> {
@@ -130,7 +135,8 @@ public class DefaultPlaylist implements Playlist {
             players.add(play.getPlayer());
             play.getPlayer().getFuture().thenAccept(players::remove);
 
-            listeners.forEach(listener -> listener.onTrackChanged(this, track));
+            if (oldTrack != this.track)
+                listeners.forEach(listener -> listener.onTrackChanged(this, track));
 
             return play.getTrack();
         } catch (Exception e) {

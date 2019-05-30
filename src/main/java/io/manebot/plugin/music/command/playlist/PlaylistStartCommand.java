@@ -21,7 +21,8 @@ public class PlaylistStartCommand extends AnnotatedCommandExecutor {
     public void start(CommandSender sender,
                      @CommandArgumentSearch.Argument() Search search) throws CommandExecutionException {
         music.startPlaylist(
-                sender.getPlatformUser().getAssociation(), sender.getConversation(),
+                sender.getPlatformUser().getAssociation(),
+                sender.getConversation(),
                 builder -> builder.setQueue(queueSelector -> queueSelector.from(search))
         );
     }

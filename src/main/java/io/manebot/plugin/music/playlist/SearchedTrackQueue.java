@@ -2,6 +2,7 @@ package io.manebot.plugin.music.playlist;
 
 import io.manebot.database.Database;
 import io.manebot.database.search.Search;
+import io.manebot.database.search.SearchOperator;
 import io.manebot.database.search.SearchResult;
 
 import io.manebot.plugin.music.database.model.Community;
@@ -29,7 +30,10 @@ public class SearchedTrackQueue implements TrackQueue {
     }
 
     private SearchResult<Track> execute() throws SQLException {
-        return Track.createSearch(database, community).random(search, BATCH_SIZE);
+        return Track.createSearch(database, community, (clause) -> {
+            //noinspection unchecked
+            clause.addPredicate(SearchOperator.MERGE, clause.getCriteriaBuilder().gt(clause.getRoot().get("length"), 0));
+        }).random(search, BATCH_SIZE);
     }
 
     private Track get() {
