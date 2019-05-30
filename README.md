@@ -5,6 +5,16 @@ Please note that this plugin uses `youtube-dl` (https://rg3.github.io/youtube-dl
 * Use the provided, official Manebot Docker image
 * Install youtube-dl into your environment
 
+## Highlights
+
+* Supports many sites through the use of **youtube-dl**
+* Supports virtually any container format (i.e. mp4, mov) via FFmpeg, as well as virtually any audio codec it does (i.e. aac, mp3)
+* Supports HLS livestreams (i.e. all those YouTube LIVE music stations, or your favourite live-streamer)
+* Uses the Manebot audio system (https://github.com/Manevolent/manebot-audio): cross-fading, low-CPU, high throughput audio playback and mixing on supported platforms (Teamspeak and Discord) via their respective Manebot plugins
+* Repository storage system to cache tracks offline for faster access
+* Complete playlist system designed around a powerful track search engine
+* Independent track metadata isolated per designated community (i.e. Discord guilds), such as a like/dislike system, tags, and play counts.
+
 ## Commands
 
 ### track
