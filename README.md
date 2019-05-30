@@ -7,6 +7,8 @@ Please note that this plugin uses `youtube-dl` (https://rg3.github.io/youtube-dl
 
 ## Highlights
 
+### Features
+
 * Supports many sites through the use of **youtube-dl**
 * Supports virtually any container format (i.e. mp4, mov) via FFmpeg, as well as virtually any audio codec it does (i.e. aac, mp3)
 * Supports HLS livestreams (i.e. all those YouTube LIVE music stations, or your favourite live-streamer)
@@ -14,6 +16,15 @@ Please note that this plugin uses `youtube-dl` (https://rg3.github.io/youtube-dl
 * Repository storage system to cache tracks offline for faster access
 * Complete playlist system designed around a powerful track search engine
 * Independent track metadata isolated per designated community (i.e. Discord guilds), such as a like/dislike system, tags, and play counts.
+
+### Installation
+
+Installing the Manebot Music plugin is easy.  Just run the following commands:
+
+```
+plugin install music
+plugin enable music
+```
 
 ## Commands
 
