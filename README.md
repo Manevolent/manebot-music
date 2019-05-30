@@ -93,6 +93,8 @@ You can also use leverage the repository heirarchy to replicate your precious tr
 
 ## Under the hood
 
+### Playback
+
 <p align="center"><img src="https://raw.githubusercontent.com/Manevolent/manebot-music/master/pipeline.png"></p>
 
 * First, a **source bitstream** is acquired using the FFmpeg API bundled with the `media` plugin, `FFmpeg4j`.  `FFmpeg4j` uses its own bundled native C libraries to connect to a `URL` or `InputStream` directly in-process.
