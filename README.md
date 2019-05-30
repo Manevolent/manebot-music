@@ -72,4 +72,11 @@ You can also use leverage the repository heirarchy to replicate your precious tr
 
 ## Under the hood
 
-<img src="https://raw.githubusercontent.com/Manevolent/manebot-music/master/pipeline.png">
+<p align="center"><img src="https://raw.githubusercontent.com/Manevolent/manebot-music/master/pipeline.png"></p>
+
+* First, a **source bitstream** is acquired using the FFmpeg API bundled with the `media` plugin, `FFmpeg4j`.  `FFmpeg4j` uses its own bundled native C libraries to connect to a `URL` or `InputStream` directly in-process.
+* The bitstream is demuxed into several *substreams*, which are individually evaluated. All video substreams are discarded at this point, to save on the CPU time needed to decode only needed audio information. An ideal audio substream is selected; most videos/tracks/files only have one audio stream, but if there are multiple the primary stream is selected.
+* The substream is decoded, and at this point enters the Manebot audio engine.  Decoded samples are stored in a 10-second *buffer*, so livestreams have an opportunity to "read-ahead" and not stutter (kind-of like the YouTube and Twitch players would). This buffer is updated on its own thread to reduce blocking time on a mixer, therefore eliminating stutter on the mixer's sinks (i.e. your ears!). Samples at this point forward are unspooled from the aforementioned buffer at the sample-rate set by the Mixer where the track/video will be playing.   This is done in `FFmpegAudioProvider` of the `audio` plugin.
+* If necessary, the samples are piped next into a `ResampledAudioProvider` unique to the prior provider. This provider will resample the incoming samples real-time and provide those samples to the next consumer in the chain.
+* A `TransitionedAudioPlayer` is used to cross-fade (fade-in, fade-out) the track smoothly, so that you get a nice transition on playlists. Per-user volume modification happens here. As `TransitionedAudioPlayer` is also a `MixerChannel`, it is connected directly to the mixer where the track/video is to be played.
+* The mixer will take care of retrieving samples from the stream ahead of it as necessary; it has its own built-in timer switch, as do its sinks (i.e. Teamspeak or Discord).
