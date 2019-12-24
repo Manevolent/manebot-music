@@ -35,9 +35,10 @@ import java.util.function.Consumer;
                 @Index(columnList = "dislikes"),
                 @Index(columnList = "plays"),
                 @Index(columnList = "score"),
-                @Index(columnList = "userId")
+                @Index(columnList = "userId"),
+                @Index(columnList = "uuid", unique = true)
         },
-        uniqueConstraints = {@UniqueConstraint(columnNames ={"communityId","url"})}
+        uniqueConstraints = {@UniqueConstraint(columnNames ={"communityId","url"}),@UniqueConstraint(columnNames ={"uuid"})}
 )
 public class Track extends TimedRow {
     @Transient
@@ -59,6 +60,9 @@ public class Track extends TimedRow {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column()
     private int trackId;
+    
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private UUID uuid;
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "communityId")
@@ -264,7 +268,11 @@ public class Track extends TimedRow {
             ).setParameter("trackId", getTrackId()).getResultList();
         });
     }
-
+    
+    public UUID getUuid() {
+        return uuid;
+    }
+    
     /**
      * The Builder is responsible for constructing a track.  This class is used by the TrackSource API implementors to
      * abstractly supply their source-specific metadata (e.g. YouTube tags) into a track instance during its

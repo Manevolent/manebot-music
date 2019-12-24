@@ -18,7 +18,7 @@ public class NullRepository extends AbstractRepository {
 
     @Override
     public Resource get(TrackSource.Result result) throws IllegalArgumentException, IOException {
-        return new NullResource(this, Repository.toUUID(result.getUrl()));
+        return new NullResource(this, result.getTrack().getUuid());
     }
 
     private class NullResource extends AbstractResource {

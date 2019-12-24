@@ -29,7 +29,7 @@ public class FileRepository extends AbstractRepository {
 
     @Override
     public Resource get(TrackSource.Result result) throws IllegalArgumentException, IOException {
-        return get(Repository.toUUID(result.getUrl()));
+        return get(result.getTrack().getUuid());
     }
 
     private class ExistingResource extends TrackFileResource implements FileResource {
