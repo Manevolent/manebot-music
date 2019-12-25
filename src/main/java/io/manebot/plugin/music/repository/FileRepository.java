@@ -15,7 +15,8 @@ public class FileRepository extends AbstractRepository {
 
         File file = new File(repository.getProperties().get("path").getAsString());
 
-        if (!file.isDirectory()) throw new IllegalArgumentException("file");
+        if (!file.isDirectory()) throw new IllegalArgumentException("root file repository path is a file");
+        if (!file.exists()) if (!file.mkdirs()) throw new IllegalArgumentException("failed to create root repository path");
 
         this.directory = file;
     }
@@ -23,7 +24,6 @@ public class FileRepository extends AbstractRepository {
     @Override
     public Resource get(UUID uuid) throws IllegalArgumentException {
         TrackFile trackFile = getTrackRepository().getFile(uuid);
-        if (trackFile == null) return null;
         return new ExistingResource(this, trackFile);
     }
 
@@ -47,7 +47,7 @@ public class FileRepository extends AbstractRepository {
 
         @Override
         public OutputStream openWrite(String format) throws IOException {
-            OutputStream baseOutputStream = super.openWrite(format);
+            OutputStream baseOutputStream = FileResource.super.openWrite(format);
 
             return new OutputStream() {
                 @Override

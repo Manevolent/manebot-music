@@ -9,7 +9,7 @@ import io.manebot.plugin.music.database.model.Track;
 import io.manebot.plugin.music.database.model.TrackRepository;
 import io.manebot.plugin.music.repository.Repository;
 
-import java.io.IOException;
+import java.io.*;
 import java.net.URL;
 
 import java.util.Objects;
@@ -50,7 +50,6 @@ public interface TrackSource {
         private final ResultPriority priority;
         private final Function<AudioProtocol, AudioProvider> open;
         private final Function<Community, Track> trackFunction;
-        private final Consumer<CommandSender> chatCallable;
 
         private Track track;
 
@@ -58,13 +57,11 @@ public interface TrackSource {
                       URL url,
                       ResultPriority priority,
                       Function<Community, Track> trackFunction,
-                      ThrowingFunction<AudioProtocol, AudioProvider, IOException> open,
-                      Consumer<CommandSender> chatCallable) {
+                      ThrowingFunction<AudioProtocol, AudioProvider, IOException> open) {
             this.community = community;
             this.url = url;
             this.priority = priority;
             this.trackFunction = trackFunction;
-            this.chatCallable = chatCallable;
             this.open = open;
         }
 
@@ -86,8 +83,8 @@ public interface TrackSource {
 
         public abstract String getFormat();
 
-        public AudioProvider openDirect(AudioProtocol file) {
-            return open.apply(file);
+        public AudioProvider openDirect(AudioProtocol protocol) {
+            return open.apply(protocol);
         }
 
         public Repository.Resource get() throws IOException {
@@ -96,9 +93,7 @@ public interface TrackSource {
             return instance.get(this);
         }
 
-        public Consumer<CommandSender> getChatCallable() {
-            return chatCallable;
-        }
+        public abstract InputStream openConnection() throws IOException;
 
         public abstract boolean isLocal();
     }
@@ -111,31 +106,24 @@ public interface TrackSource {
                               String format,
                               ResultPriority priority,
                               Consumer<Track.Builder> constructor,
-                              ThrowingFunction<AudioProtocol, AudioProvider, IOException> open,
-                              Consumer<CommandSender> chatCallable) {
+                              ThrowingFunction<AudioProtocol, AudioProvider, IOException> open) {
             super(community,
                     url,
                     priority,
                     selectedCommunity -> selectedCommunity.getOrCreateTrack(url, constructor),
-                    open,
-                    chatCallable);
+                    open);
 
             this.format = format;
-        }
-
-        public DownloadResult(Community community,
-                              URL url,
-                              String format,
-                              ResultPriority priority,
-                              Consumer<Track.Builder> constructor,
-                              ThrowingFunction<AudioProtocol, AudioProvider, IOException> open) {
-            this(community, url, format, priority, constructor, open,
-                    sender -> sender.sendMessage("(Downloading track)"));
         }
 
         @Override
         public String getFormat() {
             return format;
+        }
+
+        @Override
+        public InputStream openConnection() throws IOException {
+            return getUrl().openStream();
         }
 
         @Override

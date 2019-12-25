@@ -37,10 +37,13 @@ public class TrackPlayCommand extends AnnotatedCommandExecutor {
     public void play(CommandSender sender,
                      @CommandArgumentURL.Argument() URL url)
             throws CommandExecutionException {
-        Track track = null;
+        Track track;
+
         try {
-            track = music.play(sender.getPlatformUser().getAssociation(), sender.getConversation(), builder ->
-                    builder.setTrack(trackSelector -> trackSelector.find(url)).setExclusive(true)
+            track = music.play(
+                            sender.getPlatformUser().getAssociation(),
+                            sender.getConversation(),
+                            builder -> builder.setTrack(trackSelector -> trackSelector.find(url)).setExclusive(true)
             ).getTrack();
         } catch (IOException e) {
             throw new CommandExecutionException(e);

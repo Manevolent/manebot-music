@@ -102,16 +102,6 @@ public interface Repository {
         public UUID getUUID() {
             return file.getUuid();
         }
-
-        @Override
-        public InputStream openRead() throws IOException {
-            return openRead(file.getFormat());
-        }
-
-        @Override
-        public OutputStream openWrite(String format) throws IOException {
-            return openWrite(file.getFormat());
-        }
     }
 
     interface FileResource extends Resource {

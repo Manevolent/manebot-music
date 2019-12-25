@@ -55,8 +55,7 @@ public class DatabaseTrackSource implements TrackSource {
                     track.toURL(),
                     priority,
                     community -> track,
-                    open,
-                    sender -> {/* Silent */});
+                    open);
         }
 
         @Override
@@ -66,6 +65,11 @@ public class DatabaseTrackSource implements TrackSource {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
+        }
+
+        @Override
+        public InputStream openConnection() throws IOException {
+            return get().openRead();
         }
 
         @Override

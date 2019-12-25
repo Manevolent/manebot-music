@@ -93,8 +93,9 @@ public class Play {
         Builder setDownloading(boolean caching);
 
         /**
-         * Changed the caching behavior of the track playback. When true, caching is allowed for the playback.
-         * @param caching true if downloads should be allowed, false otherwise.
+         * Changed the caching behavior of the track playback. When true, caching is allowed for the playback. Cached tracks are, optimistically, saved to the
+         * repository associated with the community.
+         * @param caching true if caching should be allowed, false otherwise.
          * @return Builder for continuance.
          */
         Builder setCaching(boolean caching);

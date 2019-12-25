@@ -264,7 +264,7 @@ public class YoutubeDLTrackSource implements TrackSource {
                     builder.setLength(duration);
                     builder.setUrl(realUrl);
                 },
-                file -> file.open(format.getUrl(), null, format.getHttpHeaders())
+                protocol -> protocol.open(format.getUrl(), null, format.getHttpHeaders())
         );
     }
 

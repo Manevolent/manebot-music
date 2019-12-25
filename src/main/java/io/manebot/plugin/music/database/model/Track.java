@@ -9,6 +9,7 @@ import io.manebot.database.search.SearchArgument;
 import io.manebot.database.search.SearchHandler;
 import io.manebot.database.search.SearchOperator;
 import io.manebot.database.search.handler.*;
+import io.manebot.plugin.music.repository.*;
 import io.manebot.user.User;
 import io.manebot.virtual.Virtual;
 
@@ -17,7 +18,6 @@ import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.Path;
 import javax.persistence.criteria.Predicate;
 import java.net.MalformedURLException;
-import java.net.URI;
 import java.net.URL;
 import java.sql.SQLException;
 import java.util.*;
@@ -263,6 +263,20 @@ public class Track extends TimedRow {
                     TrackTag.class
             ).setParameter("trackId", getTrackId()).getResultList();
         });
+    }
+
+    @Override
+    public int hashCode() {
+        return getTrackId();
+    }
+
+    @Override
+    public boolean equals(Object b) {
+        return b instanceof Track && equals((Track)b);
+    }
+
+    public boolean equals(Track b) {
+        return b != null && b.getTrackId() == getTrackId();
     }
 
     /**

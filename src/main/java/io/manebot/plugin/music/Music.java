@@ -39,12 +39,15 @@ import io.manebot.security.Permission;
 import io.manebot.user.User;
 import io.manebot.user.UserAssociation;
 import io.manebot.user.UserType;
+import org.apache.commons.io.*;
 
-import java.io.IOException;
+import java.io.*;
 import java.net.URL;
 import java.util.*;
+import java.util.concurrent.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.logging.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -63,12 +66,23 @@ public class Music implements PluginReference {
     private final Map<AudioChannel, Play> playingTracks = new LinkedHashMap<>();
     private final Map<AudioChannel, Playlist> playlists = new LinkedHashMap<>();
 
+    private final ExecutorService cacheExecutor;
+    private final Map<Track, Future<Repository.Resource>> downloads = new LinkedHashMap<>();
+
     public Music(Plugin plugin, Database database, MusicManager manager, Audio audio) {
         this.plugin = plugin;
         this.database = database;
         this.musicManager = manager;
         this.localTrackSource = new DatabaseTrackSource(this);
         this.audio = audio;
+
+        int concurrentDownloads = Integer.parseInt(plugin.getProperty("concurrentDownloads", "-1"));
+        if (concurrentDownloads > 0)
+            this.cacheExecutor = Executors.newFixedThreadPool(concurrentDownloads);
+        else if (concurrentDownloads == -1)
+            this.cacheExecutor = Executors.newCachedThreadPool();
+        else
+            this.cacheExecutor = null;
 
         // Default implementation
         createRegistration(plugin, builder -> {
@@ -415,10 +429,24 @@ public class Music implements PluginReference {
         private final AudioChannel channel;
         private final Conversation conversation;
         private TrackSource.Result result = null;
-        private boolean caching = true;
-        private boolean downloading = true;
-        private boolean exclusive = true;
         private Consumer<Track> fadeOut = (track) -> {};
+
+        /**
+         * If the track should be cached in the repository it is retrieved on.
+         * This is usually the repository associated with the community, which is in turn associated with the conversation where the download is taking place.
+         * This is effectively the main flag that allows track caching in the bot.
+         */
+        private boolean caching = true;
+
+        /**
+         * If the track can be downloaded from its remote URI as part of the retrieval process.
+         */
+        private boolean downloading = true;
+
+        /**
+         * If the play event should be exclusive of the audio channel (i.e. stop other playing tracks).
+         */
+        private boolean exclusive = true;
 
         private PlayBuilder(UserAssociation userAssociation,
                             Community community,
@@ -458,7 +486,7 @@ public class Music implements PluginReference {
         }
 
         @Override
-        public Play.Builder setDownloading(boolean caching) {
+        public Play.Builder setDownloading(boolean downloading) {
             this.downloading = downloading;
             return this;
         }
@@ -481,7 +509,7 @@ public class Music implements PluginReference {
             return this;
         }
 
-        private Play play() throws IOException, FFmpegException {
+        private Play play() throws IOException {
             Objects.requireNonNull(userAssociation);
             Objects.requireNonNull(result);
 
@@ -498,12 +526,42 @@ public class Music implements PluginReference {
             // writing to this Track's associated resource. If it does exist, we shouldn't save it to the cache twice.
             AudioProtocol protocol = getProtocol();
             AudioProvider provider;
-            if (resource.exists())
+            if (result.isLocal() && resource.exists())
                 provider = protocol.open(resource.openRead(), resource.getFormat());
             else if (!downloading)
                 throw new IllegalStateException("cannot stream track: streaming/downloading was not allowed");
-            else
+            else {
                 provider = result.openDirect(protocol);
+
+                // Attempt to cache the track as well.
+                if (caching && resource.canWrite() && (track.getLength() != null && track.getLength() > 0) && cacheExecutor != null) {
+                    Callable<Repository.Resource> callable = () -> {
+                        try {
+                            long copied = IOUtils.copyLarge(result.openConnection(), resource.openWrite());
+                            plugin.getLogger().fine(track.getUrlString() + ": downloaded " + copied + " byte(s) to repository:" +
+                                            resource.getRepository().getClass().getSimpleName());
+                        } catch (Exception e) {
+                            String message = track.getUrlString() + ": problem downloading to repository: " +
+                                            resource.getRepository().getClass().getSimpleName();
+
+                            plugin.getLogger().log(Level.WARNING, message, e);
+                            throw new IOException(message, e);
+                        } finally {
+                            synchronized (downloads) {
+                                downloads.remove(track);
+                            }
+                        }
+
+                        return resource;
+                    };
+
+                    synchronized (downloads) {
+                        if (!downloads.containsKey(track)) {
+                            downloads.put(track, cacheExecutor.submit(callable));
+                        }
+                    }
+                }
+            }
 
             try {
                 // resample on an as-needed basis
@@ -575,7 +633,7 @@ public class Music implements PluginReference {
                     // ignore
                 }
 
-                throw new IOException(e);
+                throw new IOException("Problem playing track", e);
             }
         }
     }
