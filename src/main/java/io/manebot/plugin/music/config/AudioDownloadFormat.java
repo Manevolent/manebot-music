@@ -1,19 +1,10 @@
 package io.manebot.plugin.music.config;
 
-import com.google.gson.annotations.Expose;
-
 public final class AudioDownloadFormat {
-    @Expose
-    private String container_format;
-
-    @Expose
-    private String codec;
-
-    @Expose
-    private int bitrate;
-
-    @Expose
-    private AudioFormat audioFormat;
+    public String container_format;
+    public String codec;
+    public int bitrate;
+    public AudioFormat audioFormat;
 
     public String getContainerFormat() {
         return container_format;

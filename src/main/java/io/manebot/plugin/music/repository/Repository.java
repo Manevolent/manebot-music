@@ -67,7 +67,7 @@ public interface Repository {
         InputStream openRead(String format) throws IOException;
 
         default InputStream openRead() throws IOException {
-            return openRead(getRepository().getDownloadFormat().getContainerFormat());
+            return openRead(getFormat());
         }
 
         OutputStream openWrite(String format) throws IOException;
@@ -81,26 +81,28 @@ public interface Repository {
 
     abstract class TrackFileResource implements Resource {
         private final Repository repository;
-        private final TrackFile file;
+        private final UUID uuid;
+        private final String format;
 
-        public TrackFileResource(Repository repository, TrackFile file) {
+        public TrackFileResource(Repository repository, UUID uuid, String format) {
             this.repository = repository;
-            this.file = file;
+            this.uuid = uuid;
+            this.format = format;
         }
-
-        @Override
-        public String getFormat() {
-            return file.getFormat();
-        }
-
+    
         @Override
         public Repository getRepository() {
             return repository;
         }
-
+    
         @Override
         public UUID getUUID() {
-            return file.getUuid();
+            return uuid;
+        }
+
+        @Override
+        public String getFormat() {
+            return format;
         }
     }
 
@@ -114,7 +116,7 @@ public interface Repository {
 
         @Override
         default boolean canWrite() {
-            return (!getFile().exists() && getFile().getParentFile().canWrite()) || getFile().canWrite();
+            return !getFile().exists() || getFile().canWrite();
         }
 
         @Override
@@ -125,8 +127,8 @@ public interface Repository {
         @Override
         default OutputStream openWrite(String format) throws IOException {
             // Automatically make the parent path leading to the file
-            if (!getFile().getParentFile().mkdirs())
-                throw new IOException("mkdirs");
+            if (!getFile().getParentFile().exists() && !getFile().getParentFile().mkdirs())
+                throw new IOException("mkdirs failed");
 
             return new FileOutputStream(getFile(), false); // false=overwrite
         }

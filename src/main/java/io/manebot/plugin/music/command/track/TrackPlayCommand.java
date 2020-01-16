@@ -13,7 +13,7 @@ import io.manebot.database.Database;
 import io.manebot.database.search.Search;
 import io.manebot.database.search.SearchResult;
 import io.manebot.plugin.audio.channel.AudioChannel;
-import io.manebot.plugin.music.Music;
+import io.manebot.plugin.music.*;
 import io.manebot.plugin.music.database.model.Community;
 import io.manebot.plugin.music.database.model.Track;
 

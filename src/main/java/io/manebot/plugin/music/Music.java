@@ -1,8 +1,10 @@
 package io.manebot.plugin.music;
 
-import com.github.manevolent.ffmpeg4j.FFmpegException;
+import com.github.manevolent.ffmpeg4j.*;
 
+import com.github.manevolent.ffmpeg4j.filter.audio.*;
 import com.google.common.collect.Queues;
+import com.google.common.util.concurrent.*;
 import io.manebot.chat.Chat;
 import io.manebot.chat.TextStyle;
 import io.manebot.command.CommandSender;
@@ -15,18 +17,20 @@ import io.manebot.database.search.SearchResult;
 import io.manebot.platform.PlatformUser;
 import io.manebot.plugin.Plugin;
 import io.manebot.plugin.PluginReference;
-import io.manebot.plugin.audio.Audio;
+import io.manebot.plugin.audio.*;
 import io.manebot.plugin.audio.channel.AudioChannel;
 
 import io.manebot.plugin.audio.mixer.input.AudioProvider;
 import io.manebot.plugin.audio.mixer.input.ResampledAudioProvider;
+import io.manebot.plugin.audio.mixer.output.*;
 import io.manebot.plugin.audio.player.AudioPlayer;
 
 import io.manebot.plugin.audio.player.TransitionedAudioPlayer;
-import io.manebot.plugin.audio.resample.FFmpegResampler;
-import io.manebot.plugin.audio.resample.ResamplerFactory;
+import io.manebot.plugin.audio.resample.*;
 import io.manebot.plugin.music.api.DefaultMusicRegistration;
 import io.manebot.plugin.music.api.MusicRegistration;
+import io.manebot.plugin.music.config.*;
+import io.manebot.plugin.music.config.AudioFormat;
 import io.manebot.plugin.music.database.model.Community;
 import io.manebot.plugin.music.database.model.MusicManager;
 import io.manebot.plugin.music.database.model.Track;
@@ -78,9 +82,9 @@ public class Music implements PluginReference {
 
         int concurrentDownloads = Integer.parseInt(plugin.getProperty("concurrentDownloads", "-1"));
         if (concurrentDownloads > 0)
-            this.cacheExecutor = Executors.newFixedThreadPool(concurrentDownloads);
+            this.cacheExecutor = Executors.newFixedThreadPool(concurrentDownloads, new ThreadFactoryBuilder().setPriority(Thread.MIN_PRIORITY).build());
         else if (concurrentDownloads == -1)
-            this.cacheExecutor = Executors.newCachedThreadPool();
+            this.cacheExecutor = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setPriority(Thread.MIN_PRIORITY).build());
         else
             this.cacheExecutor = null;
 
@@ -189,20 +193,18 @@ public class Music implements PluginReference {
         return musicManager.getLastPlayed(conversation);
     }
 
-    public TrackSource.Result findRemoteTrack(Community community, URL url) throws IOException {
+    public TrackSource.Result findRemoteTrack(Community community, URL url) throws IllegalArgumentException {
         Objects.requireNonNull(community);
 
         return registrations.values().stream()
                 .flatMap(registration -> registration.getTrackSources().stream())
-                .map(
-                        trackSource -> {
-                            try {
-                                return trackSource.find(community, url);
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        }
-                )
+                .map(trackSource -> {
+                    try {
+                        return trackSource.find(community, url);
+                    } catch (TrackDownloadException e) {
+                        throw new IllegalArgumentException(e.getMessage());
+                    }
+                })
                 .filter(Objects::nonNull)
                 .sorted(
                         new Comparator<TrackSource.Result>() {
@@ -221,16 +223,24 @@ public class Music implements PluginReference {
                 );
     }
 
-    public TrackSource.Result findLocalTrack(Community community, URL url) throws IOException {
+    public TrackSource.Result findLocalTrack(Community community, URL url) throws IOException, TrackDownloadException {
         Objects.requireNonNull(community);
 
         TrackSource.Result databaseResult = getLocalTrackSource().find(community, url);
-        if (databaseResult != null && databaseResult.get().exists())
-            return databaseResult;
-        else return null;
+        if (databaseResult != null) {
+            Repository.Resource resource = databaseResult.get();
+            if (resource.exists())
+                return databaseResult;
+            else {
+                if (!(resource.getRepository() instanceof NullRepository))
+                    getPlugin().getLogger().log(Level.WARNING, "Database result exists for track " + databaseResult.getUrl() + ", but no resource " +
+                                    "exists for repository " + resource.getRepository().getClass().getName() + ".");
+                return null;
+            }
+        } else return null;
     }
 
-    public TrackSource.Result findTrack(Community community, URL url) throws IOException {
+    public TrackSource.Result findTrack(Community community, URL url) throws IOException, TrackDownloadException {
         TrackSource.Result result = findLocalTrack(community, url);
         if (result == null)
             result = findRemoteTrack(community, url);
@@ -527,24 +537,56 @@ public class Music implements PluginReference {
             AudioProtocol protocol = getProtocol();
             AudioProvider provider;
             if (result.isLocal() && resource.exists())
-                provider = protocol.open(resource.openRead(), resource.getFormat());
+                provider = protocol.openProvider(resource.openRead());
             else if (!downloading)
                 throw new IllegalStateException("cannot stream track: streaming/downloading was not allowed");
             else {
-                provider = result.openDirect(protocol);
+                provider = result.openProvider(protocol);
 
                 // Attempt to cache the track as well.
                 if (caching && resource.canWrite() && (track.getLength() != null && track.getLength() > 0) && cacheExecutor != null) {
                     Callable<Repository.Resource> callable = () -> {
                         try {
-                            long copied = IOUtils.copyLarge(result.openConnection(), resource.openWrite());
-                            plugin.getLogger().fine(track.getUrlString() + ": downloaded " + copied + " byte(s) to repository:" +
-                                            resource.getRepository().getClass().getSimpleName());
+                            int bufferSize = 1024;
+                            
+                            plugin.getLogger().info(track.getUrlString() + ": transcoding to " + resource.getRepository().getClass() + "...");
+                            
+                            try (AudioProvider cachedAudioProvider = result.openProvider(protocol)) {
+                                AudioDownloadFormat downloadFormat = resource.getRepository().getDownloadFormat();
+                                try (Resampler resampler = protocol.openResampler(AudioFormat.from(cachedAudioProvider.getFormat()),
+                                                downloadFormat.getAudioFormat(), bufferSize)) {
+                                    try (AudioConsumer cachedAudioConsumer = protocol.openConsumer(resource.openWrite(), downloadFormat)) {
+                                        float[] in_buffer = new float[bufferSize];
+                                        float[] out_buffer = new float[(int) Math.ceil(bufferSize * (1 / resampler.getScale()))];
+                                        int len;
+                                        try {
+                                            while ((len = cachedAudioProvider.read(in_buffer, 0, in_buffer.length)) > 0) {
+                                                //len = resampler.resample(in_buffer, len, out_buffer, out_buffer.length);
+                                                cachedAudioConsumer.write(in_buffer, len);
+                                                Arrays.fill(in_buffer, 0F);
+                                            }
+                                        } catch (EOFException ignored) {
+                                            // ignore, this is normal
+                                        }
+                                        //len = resampler.flush(out_buffer, out_buffer.length);
+                                        //if (len > 0)
+                                        //    cachedAudioConsumer.write(out_buffer, len);
+                                    }
+                                }
+                            }
+                            
+                            plugin.getLogger().info(track.getUrlString() + ": transcode to " + resource.getRepository().getClass() + " completed");
                         } catch (Exception e) {
-                            String message = track.getUrlString() + ": problem downloading to repository: " +
-                                            resource.getRepository().getClass().getSimpleName();
+                            String message = track.getUrlString() + ": problem transcoding track to repository: " + resource.getRepository().getClass();
 
                             plugin.getLogger().log(Level.WARNING, message, e);
+                            
+                            try {
+                                resource.delete();
+                            } catch (Exception ex) {
+                                e.addSuppressed(ex);
+                            }
+                            
                             throw new IOException(message, e);
                         } finally {
                             synchronized (downloads) {
@@ -649,7 +691,7 @@ public class Music implements PluginReference {
         public TrackSource.Result find(URL url) throws IllegalArgumentException {
             try {
                 return Music.this.findTrack(community, url);
-            } catch (IOException e) {
+            } catch (IOException | TrackDownloadException e) {
                 throw new IllegalArgumentException("Problem finding track " + url.toExternalForm(), e);
             }
         }
@@ -664,7 +706,7 @@ public class Music implements PluginReference {
                         })
                         .map(Track::toURL)
                         .orElseThrow(() -> new NoSuchElementException("no results found")));
-            } catch (IOException e) {
+            } catch (IOException | TrackDownloadException e) {
                 throw new IllegalArgumentException("Problem finding track", e);
             }
         }

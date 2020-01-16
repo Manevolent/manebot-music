@@ -23,20 +23,19 @@ public class FileRepository extends AbstractRepository {
 
     @Override
     public Resource get(UUID uuid) throws IllegalArgumentException {
-        TrackFile trackFile = getTrackRepository().getFile(uuid);
-        return new ExistingResource(this, trackFile);
+        return new ExistingResource(this, uuid, getTrackRepository().getFile(uuid));
     }
 
     @Override
     public Resource get(TrackSource.Result result) throws IllegalArgumentException, IOException {
-        return get(Repository.toUUID(result.getUrl()));
+        return get(result.getUUID());
     }
 
     private class ExistingResource extends TrackFileResource implements FileResource {
         private final File file;
 
-        private ExistingResource(Repository repository, TrackFile trackFile) {
-            super(repository, trackFile);
+        private ExistingResource(Repository repository, UUID uuid, TrackFile trackFile) {
+            super(repository, uuid, trackFile == null ? repository.getDownloadFormat().getContainerFormat() : trackFile.getFormat());
             file = new File(directory, getUUID().toString().replace("-", File.separator));
         }
 
@@ -65,7 +64,8 @@ public class FileRepository extends AbstractRepository {
                     baseOutputStream.close();
 
                     // Create TrackFile instance for the next run of this
-                    getTrackRepository().createFile(getTrackRepository(), getUUID(), format);
+                    if (getTrackRepository().getFile(getUUID()) == null)
+                        getTrackRepository().createFile(getTrackRepository(), getUUID(), format);
                 }
             };
         }

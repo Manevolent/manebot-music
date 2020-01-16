@@ -1,9 +1,7 @@
 package io.manebot.plugin.music.source;
 
-import io.manebot.command.CommandSender;
-
-import io.manebot.lambda.ThrowingFunction;
 import io.manebot.plugin.audio.mixer.input.AudioProvider;
+import io.manebot.plugin.music.*;
 import io.manebot.plugin.music.database.model.Community;
 import io.manebot.plugin.music.database.model.Track;
 import io.manebot.plugin.music.database.model.TrackRepository;
@@ -12,7 +10,7 @@ import io.manebot.plugin.music.repository.Repository;
 import java.io.*;
 import java.net.URL;
 
-import java.util.Objects;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -39,7 +37,7 @@ public interface TrackSource {
      * @throws IOException if there is a problem obtaining track metadata.
      * @throws IllegalArgumentException if there is a problem validating the url argument.
      */
-    Result find(Community community, URL url) throws IOException, IllegalArgumentException;
+    Result find(Community community, URL url) throws TrackDownloadException;
 
     /**
      * The Result class handles found and identified tracks.
@@ -47,24 +45,20 @@ public interface TrackSource {
     abstract class Result {
         private final Community community;
         private final URL url;
+        private final UUID uuid;
         private final ResultPriority priority;
-        private final Function<AudioProtocol, AudioProvider> open;
         private final Function<Community, Track> trackFunction;
 
         private Track track;
 
-        public Result(Community community,
-                      URL url,
-                      ResultPriority priority,
-                      Function<Community, Track> trackFunction,
-                      ThrowingFunction<AudioProtocol, AudioProvider, IOException> open) {
+        public Result(Community community, URL url, UUID uuid, ResultPriority priority, Function<Community, Track> trackFunction) {
             this.community = community;
             this.url = url;
+            this.uuid = uuid;
             this.priority = priority;
             this.trackFunction = trackFunction;
-            this.open = open;
         }
-
+        
         public Community getCommunity() {
             return community;
         }
@@ -81,10 +75,8 @@ public interface TrackSource {
             return track != null ? track : (track = trackFunction.apply(community));
         }
 
-        public abstract String getFormat();
-
-        public AudioProvider openDirect(AudioProtocol protocol) {
-            return open.apply(protocol);
+        public AudioProvider openProvider(AudioProtocol protocol) throws IOException {
+            return protocol.openProvider(openConnection());
         }
 
         public Repository.Resource get() throws IOException {
@@ -96,34 +88,15 @@ public interface TrackSource {
         public abstract InputStream openConnection() throws IOException;
 
         public abstract boolean isLocal();
+    
+        public UUID getUUID() {
+            return uuid;
+        }
     }
 
-    class DownloadResult extends Result {
-        private final String format;
-
-        public DownloadResult(Community community,
-                              URL url,
-                              String format,
-                              ResultPriority priority,
-                              Consumer<Track.Builder> constructor,
-                              ThrowingFunction<AudioProtocol, AudioProvider, IOException> open) {
-            super(community,
-                    url,
-                    priority,
-                    selectedCommunity -> selectedCommunity.getOrCreateTrack(url, constructor),
-                    open);
-
-            this.format = format;
-        }
-
-        @Override
-        public String getFormat() {
-            return format;
-        }
-
-        @Override
-        public InputStream openConnection() throws IOException {
-            return getUrl().openStream();
+    abstract class DownloadResult extends Result {
+        DownloadResult(Community community, URL url, ResultPriority priority, Consumer<Track.Builder> constructor) {
+            super(community, url, Repository.toUUID(url), priority, selectedCommunity -> selectedCommunity.getOrCreateTrack(url, constructor));
         }
 
         @Override

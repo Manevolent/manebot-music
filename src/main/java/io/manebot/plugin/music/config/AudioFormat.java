@@ -5,11 +5,17 @@ import com.github.manevolent.ffmpeg4j.FFmpegException;
 import com.google.gson.annotations.Expose;
 
 public final class AudioFormat {
-    @Expose
-    private int sample_rate;
-
-    @Expose
-    private int channels;
+    public AudioFormat(int sample_rate, int channels) {
+        this.sample_rate = sample_rate;
+        this.channels = channels;
+    }
+    
+    public AudioFormat() {
+    
+    }
+    
+    public int sample_rate;
+    public int channels;
 
     public int getSampleRate() {
         return this.sample_rate;
@@ -30,5 +36,21 @@ public final class AudioFormat {
                 channels,
                 FFmpeg.guessFFMpegChannelLayout(channels)
         );
+    }
+    
+    public javax.sound.sampled.AudioFormat toJava() throws FFmpegException {
+        return new javax.sound.sampled.AudioFormat(
+                        javax.sound.sampled.AudioFormat.Encoding.PCM_FLOAT,
+                        getSampleRate(),
+                        32,
+                        channels,
+                        4 * channels,
+                        getSampleRate(),
+                        false
+        );
+    }
+    
+    public static AudioFormat from(javax.sound.sampled.AudioFormat audioFormat) {
+        return new AudioFormat((int) audioFormat.getSampleRate(), audioFormat.getChannels());
     }
 }

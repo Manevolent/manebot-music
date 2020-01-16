@@ -29,6 +29,7 @@ import java.util.function.Consumer;
 @Table(
         indexes = {
                 @Index(columnList = "communityId,url", unique = true),
+                @Index(columnList = "communityId,uuid", unique = true),
                 @Index(columnList = "name"),
                 @Index(columnList = "length"),
                 @Index(columnList = "likes"),
@@ -37,7 +38,10 @@ import java.util.function.Consumer;
                 @Index(columnList = "score"),
                 @Index(columnList = "userId")
         },
-        uniqueConstraints = {@UniqueConstraint(columnNames ={"communityId","url"})}
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames ={"communityId","url"}),
+                @UniqueConstraint(columnNames ={"communityId","uuid"})
+        }
 )
 public class Track extends TimedRow {
     @Transient
@@ -49,16 +53,24 @@ public class Track extends TimedRow {
 
     public Track(Database database, URL url, Community community, Double length, String name, User user) {
         this(database);
+        
+        this.uuid = Repository.toUUID(url);
         this.url = url.toExternalForm();
         this.community = community;
         this.length = length;
         this.name = name;
+        
+        if (user instanceof io.manebot.database.model.User)
+            this.user = (io.manebot.database.model.User) user;
     }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column()
     private int trackId;
+    
+    @Column(columnDefinition = "BINARY(16)", nullable = false)
+    private UUID uuid;
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "communityId")
@@ -278,7 +290,11 @@ public class Track extends TimedRow {
     public boolean equals(Track b) {
         return b != null && b.getTrackId() == getTrackId();
     }
-
+    
+    public UUID getUUID() {
+        return uuid;
+    }
+    
     /**
      * The Builder is responsible for constructing a track.  This class is used by the TrackSource API implementors to
      * abstractly supply their source-specific metadata (e.g. YouTube tags) into a track instance during its

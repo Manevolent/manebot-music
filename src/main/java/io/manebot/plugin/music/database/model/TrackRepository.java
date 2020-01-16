@@ -1,20 +1,16 @@
 package io.manebot.plugin.music.database.model;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.fasterxml.jackson.databind.*;
+import com.google.gson.*;
 import io.manebot.database.Database;
 import io.manebot.database.model.TimedRow;
 import io.manebot.plugin.music.config.AudioDownloadFormat;
 import io.manebot.plugin.music.repository.Repository;
 
 import javax.persistence.*;
-import java.io.InputStream;
-import java.lang.reflect.InvocationTargetException;
-import java.net.URL;
+import java.io.*;
 import java.sql.SQLException;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 
 @javax.persistence.Entity
 @Table(
@@ -66,6 +62,7 @@ public class TrackRepository extends TimedRow {
     }
 
     public JsonObject getProperties() {
+        if (properties == null) throw new NullPointerException("properties");
         return new JsonParser().parse(properties).getAsJsonObject();
     }
 
@@ -119,14 +116,18 @@ public class TrackRepository extends TimedRow {
     }
 
     public AudioDownloadFormat getFormat() {
-        return format == null ? null : createGson().fromJson(format, AudioDownloadFormat.class);
+        try {
+            return format == null ? null : new ObjectMapper().readValue(format, AudioDownloadFormat.class);
+        } catch (IOException e) {
+            throw new RuntimeException("Problem parsing JSON: " + getClass().getName() + ".format", e);
+        }
     }
 
     public void setFormat(AudioDownloadFormat format) {
         try {
             this.format = database.executeTransaction(s -> {
                 TrackRepository repository = s.find(TrackRepository.class, getRepositoryId());
-                repository.format = createGson().toJson(format);
+                repository.format = new ObjectMapper().writeValueAsString(format);
                 repository.setUpdated(System.currentTimeMillis());
                 return repository.format;
             });
@@ -181,10 +182,6 @@ public class TrackRepository extends TimedRow {
         }
 
         return instance;
-    }
-
-    private static Gson createGson() {
-        return new Gson();
     }
 
     public long countFiles() {
