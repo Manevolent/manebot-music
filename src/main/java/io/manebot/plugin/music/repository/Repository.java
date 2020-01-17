@@ -133,5 +133,9 @@ public interface Repository {
             return new FileOutputStream(getFile(), false); // false=overwrite
         }
     }
+    
+    static UUID toUUID(URL url) {
+        return UUID.nameUUIDFromBytes(url.toExternalForm().getBytes());
+    }
 
 }
