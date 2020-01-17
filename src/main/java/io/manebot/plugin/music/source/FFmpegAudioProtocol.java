@@ -124,7 +124,7 @@ public class FFmpegAudioProtocol implements AudioProtocol {
                             Collections.singletonMap("b", Integer.toString(format.getAudioBitrate())));
         } catch (FFmpegException ex) {
             try {
-                targetStream.close();
+                io.close();
             } catch (Exception e) {
                 ex.addSuppressed(e);
             }
@@ -136,7 +136,7 @@ public class FFmpegAudioProtocol implements AudioProtocol {
             targetStream.writeHeader();
         } catch (Exception ex) {
             try {
-                targetStream.close();
+                io.close();
             } catch (Exception e) {
                 ex.addSuppressed(e);
             }

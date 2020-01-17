@@ -5,9 +5,9 @@
 
 package io.manebot.plugin.music.source;
 
-import java.io.EOFException;
-import java.io.IOException;
-import java.io.InputStream;
+import org.apache.commons.io.*;
+
+import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
@@ -22,7 +22,6 @@ public class RangedInputStream extends InputStream {
     private final URL url;
     private final Map<String, String> requestProperties;
     private final int bufferSize;
-    private final ByteBuffer buffer;
     private InputStream current;
     private Long contentLength;
     private Boolean supportsRangeRequests;
@@ -32,7 +31,6 @@ public class RangedInputStream extends InputStream {
 	this.url = url;
 	this.requestProperties = requestProperties;
 	this.bufferSize = bufferSize;
-	this.buffer = ByteBuffer.allocate(bufferSize).limit(0);
     }
     
     private URLConnection openBasicConnection() throws IOException {
@@ -41,7 +39,11 @@ public class RangedInputStream extends InputStream {
 	return connection;
     }
     
-    private InputStream next() throws IOException {
+    private InputStream createBufferedStream(InputStream inputStream, int chunkSize) {
+        return new BufferedInputStream(inputStream, chunkSize);
+    }
+    
+    private InputStream next(int chunkSize) throws IOException {
 	URLConnection connection = this.openBasicConnection();
 	if (connection instanceof HttpURLConnection) {
 	    HttpURLConnection httpURLConnection = (HttpURLConnection)connection;
@@ -49,7 +51,7 @@ public class RangedInputStream extends InputStream {
 	    if (this.supportsRangeRequests != null && this.supportsRangeRequests) {
 		httpURLConnection.setRequestProperty(
 				"Range",
-				"bytes=" + this.position + "-" + Math.min(this.position + (long) this.bufferSize, this.contentLength)
+				"bytes=" + this.position + "-" + (Math.min(this.position + (long) chunkSize, this.contentLength) - 1)
 		);
 	    }
 	    
@@ -67,7 +69,7 @@ public class RangedInputStream extends InputStream {
 			    this.supportsRangeRequests = httpURLConnection.getHeaderField("accept-ranges").equalsIgnoreCase("bytes");
 			    if (this.supportsRangeRequests) {
 				httpURLConnection.disconnect();
-				return next();
+				return next(chunkSize);
 			    }
 			}
 			
@@ -75,7 +77,7 @@ public class RangedInputStream extends InputStream {
 			    throw new IOException("Unexpected content start at position 0 when content position is " + this.position);
 			}
 		 
-			return connection.getInputStream();
+			return createBufferedStream(connection.getInputStream(), chunkSize);
 		    case 204:
 			throw new EOFException("HTTP 204 No Content");
 		    case 206:
@@ -96,13 +98,13 @@ public class RangedInputStream extends InputStream {
 			}
 			
 			long end = Long.parseLong(matcher.group(3));
-			long length = end - start;
+			long length = (end - start) + 1;
 			if (length < 0L)
 			    throw new IOException("Invalid length: " + length);
 			else if (length == 0)
 			    throw new EOFException();
 			
-			if (length != httpURLConnection.getContentLengthLong() - 1L) {
+			if (length != httpURLConnection.getContentLengthLong()) {
 			    throw new EOFException("Mismatched range request response size and content length: " +
 					    length + " != " + httpURLConnection.getContentLengthLong());
 			}
@@ -115,57 +117,63 @@ public class RangedInputStream extends InputStream {
 			    if (contentLength == null)
 			        throw new IOException("Problem reading content length", ex);
 			}
+		 
+			if (position + length > this.contentLength)
+			    throw new IOException("Unexpected content length: " + (position + length) + " > " + this.contentLength);
 			
-			return connection.getInputStream();
+			return createBufferedStream(connection.getInputStream(), (int) length);
 		}
 	    }
 	    
 	    throw new IOException(this.url.toExternalForm() + " returned HTTP " + httpURLConnection.getResponseCode()
 			    + " " + httpURLConnection.getResponseMessage());
 	} else {
-	    return connection.getInputStream();
+	    return createBufferedStream(connection.getInputStream(), chunkSize);
 	}
     }
     
-    public int available() {
-	return this.buffer.remaining();
+    @Override
+    public int available() throws IOException {
+	return current != null ? current.available() : 0;
     }
     
+    @Override
     public int read() throws IOException {
-	if (this.contentLength != null && this.position == this.contentLength) {
+	throw new IOException(new UnsupportedOperationException());
+    }
+    
+    @Override
+    public int read(byte[] buffer, int offs, int len) throws IOException {
+	if (this.contentLength != null && this.position >= this.contentLength) {
 	    return -1;
-	} else {
-	    if (!this.buffer.hasRemaining()) {
-		if (this.current == null) {
-		    try {
-			this.current = this.next();
-		    } catch (EOFException var2) {
-		        var2.printStackTrace();
-			return -1;
-		    }
-		}
-		
-		this.buffer.position(0);
-		this.buffer.limit(this.bufferSize);
-		int b = -1;
-		
-		while(this.buffer.hasRemaining() && (b = this.current.read()) >= 0) {
-		    this.buffer.put((byte)b);
-		}
-		
-		if (b == -1) {
-		    this.current.close();
-		    this.current = null;
-		}
-		
-		this.buffer.flip();
-		if (!this.buffer.hasRemaining()) {
+	}
+ 
+	int position = 0;
+	while (position < len) {
+	    if (contentLength != null && this.position >= this.contentLength)
+	        return position > 0 ? position : -1;
+	    
+	    if (this.current == null) {
+		try {
+		    this.current = this.next(this.bufferSize);
+		} catch (EOFException var2) {
 		    return -1;
 		}
 	    }
 	    
-	    ++this.position;
-	    return this.buffer.get() & 255;
+	    int read = this.current.read(buffer, position + offs, len - position);
+	    
+	    if (read > 0) {
+		position += read;
+		this.position += read;
+	    } else if (read == -1) {
+		this.current.close();
+		this.current = null;
+	    } else {
+	        throw new IOException("Unexpected read size: " + read);
+	    }
 	}
+	
+	return position;
     }
 }

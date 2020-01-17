@@ -1,8 +1,5 @@
 package io.manebot.plugin.music;
 
-import com.github.manevolent.ffmpeg4j.*;
-
-import com.github.manevolent.ffmpeg4j.filter.audio.*;
 import com.google.common.collect.Queues;
 import com.google.common.util.concurrent.*;
 import io.manebot.chat.Chat;
@@ -387,7 +384,7 @@ public class Music implements PluginReference {
     }
 
     public Play play(UserAssociation user, Conversation conversation, Consumer<Play.Builder> consumer)
-            throws IllegalArgumentException, IOException, FFmpegException {
+            throws IllegalArgumentException, IOException {
         Community community = getCommunity(conversation);
         if (community == null)
             throw new IllegalArgumentException("There is no music community associated with this conversation.");
@@ -397,7 +394,7 @@ public class Music implements PluginReference {
 
     public Play play(UserAssociation user, Conversation conversation, Community community,
                      Consumer<Play.Builder> consumer)
-            throws IllegalArgumentException, IOException, FFmpegException {
+            throws IllegalArgumentException, IOException {
         AudioChannel channel = audio.getChannel(conversation);
         if (channel == null)
             throw new IllegalArgumentException("There is no audio channel associated with this conversation.");
@@ -547,9 +544,9 @@ public class Music implements PluginReference {
                 if (caching && resource.canWrite() && (track.getLength() != null && track.getLength() > 0) && cacheExecutor != null) {
                     Callable<Repository.Resource> callable = () -> {
                         try {
-                            int bufferSize = 1024;
+                            int bufferSize = 32768;
                             
-                            plugin.getLogger().info(track.getUrlString() + ": transcoding to " + resource.getRepository().getClass() + "...");
+                            plugin.getLogger().fine(track.getUrlString() + ": transcoding to " + resource.getRepository().getClass() + "...");
                             
                             try (AudioProvider cachedAudioProvider = result.openProvider(protocol)) {
                                 AudioDownloadFormat downloadFormat = resource.getRepository().getDownloadFormat();
@@ -561,21 +558,20 @@ public class Music implements PluginReference {
                                         int len;
                                         try {
                                             while ((len = cachedAudioProvider.read(in_buffer, 0, in_buffer.length)) > 0) {
-                                                //len = resampler.resample(in_buffer, len, out_buffer, out_buffer.length);
-                                                cachedAudioConsumer.write(in_buffer, len);
-                                                Arrays.fill(in_buffer, 0F);
+                                                len = resampler.resample(in_buffer, len, out_buffer, out_buffer.length);
+                                                cachedAudioConsumer.write(out_buffer, len);
                                             }
                                         } catch (EOFException ignored) {
                                             // ignore, this is normal
                                         }
-                                        //len = resampler.flush(out_buffer, out_buffer.length);
-                                        //if (len > 0)
-                                        //    cachedAudioConsumer.write(out_buffer, len);
+                                        len = resampler.flush(out_buffer, out_buffer.length);
+                                        if (len > 0)
+                                            cachedAudioConsumer.write(out_buffer, len);
                                     }
                                 }
                             }
                             
-                            plugin.getLogger().info(track.getUrlString() + ": transcode to " + resource.getRepository().getClass() + " completed");
+                            plugin.getLogger().fine(track.getUrlString() + ": transcode to " + resource.getRepository().getClass() + " completed");
                         } catch (Exception e) {
                             String message = track.getUrlString() + ": problem transcoding track to repository: " + resource.getRepository().getClass();
 

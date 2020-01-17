@@ -47,8 +47,6 @@ public class TrackPlayCommand extends AnnotatedCommandExecutor {
             ).getTrack();
         } catch (IOException e) {
             throw new CommandExecutionException(e);
-        } catch (FFmpegException e) {
-            throw new CommandExecutionException(e);
         }
 
         sender.sendMessage("(Playing \"" + track.getName() + "\")");
@@ -75,7 +73,7 @@ public class TrackPlayCommand extends AnnotatedCommandExecutor {
             track = music.play(sender.getPlatformUser().getAssociation(), sender.getConversation(), builder ->
                     builder.setTrack(trackSelector -> trackSelector.find(searchResult)).setExclusive(true)
             ).getTrack();
-        } catch (IOException | FFmpegException e) {
+        } catch (IOException e) {
             throw new CommandExecutionException(e);
         }
 
