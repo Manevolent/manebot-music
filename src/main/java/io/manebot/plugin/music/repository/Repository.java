@@ -134,8 +134,4 @@ public interface Repository {
         }
     }
 
-    static UUID toUUID(URL url) {
-        return UUID.nameUUIDFromBytes(url.toExternalForm().getBytes());
-    }
-
 }
