@@ -74,9 +74,6 @@ public class FileRepository extends AbstractRepository {
                         throw new IOException("destination file already exists: " + destination.getPath());
                     else if (!tmpFile.renameTo(destination))
                         throw new IOException("file rename failed: " + tmpFile.getPath() + " to " + destination.getPath());
-                    
-                    if (getTrackRepository().getFile(getUUID()) == null)
-                        getTrackRepository().createFile(getTrackRepository(), getUUID(), format);
                 }
             };
         }

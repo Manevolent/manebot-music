@@ -28,9 +28,7 @@ import io.manebot.plugin.music.api.DefaultMusicRegistration;
 import io.manebot.plugin.music.api.MusicRegistration;
 import io.manebot.plugin.music.config.*;
 import io.manebot.plugin.music.config.AudioFormat;
-import io.manebot.plugin.music.database.model.Community;
-import io.manebot.plugin.music.database.model.MusicManager;
-import io.manebot.plugin.music.database.model.Track;
+import io.manebot.plugin.music.database.model.*;
 import io.manebot.plugin.music.event.playlist.*;
 import io.manebot.plugin.music.event.track.*;
 import io.manebot.plugin.music.playlist.*;
@@ -579,6 +577,10 @@ public class Music implements PluginReference {
                                     }
                                 }
                             }
+    
+                            TrackRepository trackRepository = resource.getRepository().getTrackRepository();
+                            if (trackRepository.getFile(resource.getUUID()) == null)
+                                trackRepository.createFile(trackRepository, resource.getUUID(), resource.getFormat());
                             
                             getPlugin().getBot().getEventDispatcher().execute(new TrackDownloadedEvent(this, Music.this, track, resource));
                             
