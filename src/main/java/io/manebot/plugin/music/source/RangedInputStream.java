@@ -179,19 +179,12 @@ public class RangedInputStream extends InputStream {
 	    try {
 		read = this.current.read(buffer, position + offs, read);
 	    } catch (EOFException ex) {
-	        read = -1;
+	        read = EOF;
 	    } catch (IOException ex) {
-		Logger.getGlobal().log(Level.WARNING, "Broken stream while reading " + read + " bytes from " + this.current
-				+ " [" + chunkPosition + "/" + chunkLength + "]", ex);
-	   
-		try {
-		    this.current.close();
-		} catch (IOException suppress) {
-		    ex.addSuppressed(suppress);
-		}
-	 
-		this.current = null;
-	        continue;
+		if (supportsRangeRequests != Boolean.TRUE)
+		    throw ex;
+		else
+		    read = EOF;
 	    }
 	    
 	    if (read > 0) {

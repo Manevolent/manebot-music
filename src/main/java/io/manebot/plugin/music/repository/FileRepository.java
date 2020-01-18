@@ -51,7 +51,7 @@ public class FileRepository extends AbstractRepository {
             if (!parent.exists() && !parent.mkdirs())
                 throw new IOException("mkdirs failed: " + parent.getPath());
     
-            File tmpFile = File.createTempFile(getUUID().toString(), null, parent);
+            File tmpFile = File.createTempFile(getUUID().toString() + "_", null, parent);
             OutputStream baseOutputStream = new FileOutputStream(tmpFile, false); // false=overwrite
 
             return new OutputStream() {
