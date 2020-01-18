@@ -31,6 +31,8 @@ import io.manebot.plugin.music.config.AudioFormat;
 import io.manebot.plugin.music.database.model.Community;
 import io.manebot.plugin.music.database.model.MusicManager;
 import io.manebot.plugin.music.database.model.Track;
+import io.manebot.plugin.music.event.playlist.*;
+import io.manebot.plugin.music.event.track.*;
 import io.manebot.plugin.music.playlist.*;
 import io.manebot.plugin.music.repository.FileRepository;
 import io.manebot.plugin.music.repository.NullRepository;
@@ -40,7 +42,6 @@ import io.manebot.security.Permission;
 import io.manebot.user.User;
 import io.manebot.user.UserAssociation;
 import io.manebot.user.UserType;
-import org.apache.commons.io.*;
 
 import java.io.*;
 import java.net.URL;
@@ -318,6 +319,8 @@ public class Music implements PluginReference {
         builder.addListener(new Playlist.Listener() {
             @Override
             public void onStarted(Playlist playlist) {
+                getPlugin().getBot().getEventDispatcher().execute(new PlaylistStartedEvent(this, Music.this, playlist));
+                
                 if (playlist.getUser() != null)
                     playlist.getConversation().getChat().sendFormattedMessage(
                             textBuilder ->
@@ -330,6 +333,8 @@ public class Music implements PluginReference {
 
             @Override
             public void onTrackChanged(Playlist playlist, Track track) {
+                getPlugin().getBot().getEventDispatcher().execute(new PlaylistTrackChangedEvent(this, Music.this, playlist, track));
+                
                 playlist.getConversation().getChat().sendFormattedMessage(
                         textBuilder -> textBuilder.append("(Playing \"" + track.getName() + "\")")
                 );
@@ -337,6 +342,8 @@ public class Music implements PluginReference {
 
             @Override
             public void onTransferred(Playlist playlist, UserAssociation a, UserAssociation b) {
+                getPlugin().getBot().getEventDispatcher().execute(new PlaylistTransferredEvent(this, Music.this, playlist, a, b));
+                
                 if (a != null && b != null)
                     playlist.getConversation().getChat().sendFormattedMessage(
                             textBuilder ->
@@ -352,6 +359,10 @@ public class Music implements PluginReference {
 
             @Override
             public void onStopped(Playlist playlist) {
+                playlists.remove(playlist.getChannel(), playlist);
+    
+                getPlugin().getBot().getEventDispatcher().execute(new PlaylistEndedEvent(this, Music.this, playlist));
+                
                 if (playlist.getUser() != null)
                     playlist.getConversation().getChat().sendFormattedMessage(
                             textBuilder ->
@@ -360,8 +371,6 @@ public class Music implements PluginReference {
                                             EnumSet.of(TextStyle.BOLD)
                                     ).append(" playlist has ended.")
                     );
-
-                playlists.remove(playlist.getChannel(), playlist);
             }
         });
 
@@ -571,6 +580,8 @@ public class Music implements PluginReference {
                                 }
                             }
                             
+                            getPlugin().getBot().getEventDispatcher().execute(new TrackDownloadedEvent(this, Music.this, track, resource));
+                            
                             plugin.getLogger().fine(track.getUrlString() + ": transcode to " + resource.getRepository().getClass() + " completed");
                         } catch (Exception e) {
                             String message = track.getUrlString() + ": problem transcoding track to repository: " + resource.getRepository().getClass();
@@ -624,12 +635,15 @@ public class Music implements PluginReference {
                         new TransitionedAudioPlayer.Callback() {
                             @Override
                             public void onFadeIn() {
-                                // do nothing
+                                getPlugin().getBot().getEventDispatcher().execute(new TrackStartedEvent(this, Music.this, track));
                             }
 
                             @Override
                             public void onFadeOut() {
-                                fadeOut.accept(track);
+                                if (fadeOut != null)
+                                    fadeOut.accept(track);
+                                
+                                getPlugin().getBot().getEventDispatcher().execute(new TrackFadeEvent(this, Music.this, track));
                             }
 
                             @Override
@@ -647,18 +661,19 @@ public class Music implements PluginReference {
 
                                 double start = end - timePlayedInSeconds;
                                 track.addPlayAsync(conversation, userAssociation.getUser(), start, end);
+                                
+                                getPlugin().getBot().getEventDispatcher().execute(new TrackFinshedEvent(this, Music.this, track, timePlayedInSeconds));
                             }
                         }
                 );
 
                 final Play play = new Play(Music.this, track, channel, conversation, player);
+                player.getFuture().thenRun(() -> playingTracks.remove(channel, play));
 
                 try (AudioChannel.Ownership ownership = channel.obtainChannel(userAssociation)) {
                     if (exclusive) stop(userAssociation, channel);
-
                     if (channel.addPlayer(player)) {
                         playingTracks.put(channel, play);
-                        player.getFuture().thenRun(() -> playingTracks.remove(channel, play));
                     } else throw new IllegalStateException();
                 }
 
@@ -668,7 +683,7 @@ public class Music implements PluginReference {
                 try {
                     provider.close();
                 } catch (Exception ex) {
-                    // ignore
+                    e.addSuppressed(ex);
                 }
 
                 throw new IOException("Problem playing track", e);

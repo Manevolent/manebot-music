@@ -46,7 +46,13 @@ public class FileRepository extends AbstractRepository {
 
         @Override
         public OutputStream openWrite(String format) throws IOException {
-            OutputStream baseOutputStream = FileResource.super.openWrite(format);
+            // Automatically make the parent path leading to the file
+            File parent = getFile().getParentFile();
+            if (!parent.exists() && !parent.mkdirs())
+                throw new IOException("mkdirs failed: " + parent.getPath());
+    
+            File tmpFile = File.createTempFile(getUUID().toString(), null, parent);
+            OutputStream baseOutputStream = new FileOutputStream(tmpFile, false); // false=overwrite
 
             return new OutputStream() {
                 @Override
@@ -62,8 +68,13 @@ public class FileRepository extends AbstractRepository {
                 @Override
                 public void close() throws IOException {
                     baseOutputStream.close();
-
-                    // Create TrackFile instance for the next run of this
+                    
+                    File destination = getFile();
+                    if (destination.exists())
+                        throw new IOException("destination file already exists: " + destination.getPath());
+                    else if (!tmpFile.renameTo(destination))
+                        throw new IOException("file rename failed: " + tmpFile.getPath() + " to " + destination.getPath());
+                    
                     if (getTrackRepository().getFile(getUUID()) == null)
                         getTrackRepository().createFile(getTrackRepository(), getUUID(), format);
                 }
