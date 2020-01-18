@@ -10,6 +10,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.Map;
+import java.util.logging.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -80,6 +81,7 @@ public class RangedInputStream extends InputStream {
 		 
 			BufferedInputStream wholeBis = createBufferedStream(connection.getInputStream(), chunkSize);
 			this.chunkLength = this.contentLength;
+			this.chunkPosition = 0L;
 			return wholeBis;
 		    case 204:
 			throw new EOFException("HTTP 204 No Content");
@@ -126,6 +128,7 @@ public class RangedInputStream extends InputStream {
 			
 			BufferedInputStream rangeBis = createBufferedStream(connection.getInputStream(), (int) length);
 			this.chunkLength = length;
+			this.chunkPosition = 0L;
 			return rangeBis;
 		}
 	    }
@@ -135,6 +138,7 @@ public class RangedInputStream extends InputStream {
 	} else {
 	    BufferedInputStream bis = createBufferedStream(connection.getInputStream(), (int) chunkSize);
 	    this.chunkLength = -1L;
+	    this.chunkPosition = 0L;
 	    return bis;
 	}
     }
@@ -163,7 +167,6 @@ public class RangedInputStream extends InputStream {
 	    if (this.current == null) {
 		try {
 		    this.current = this.next(this.bufferSize);
-		    this.chunkPosition = 0L;
 		} catch (EOFException var2) {
 		    return -1;
 		}
@@ -173,7 +176,23 @@ public class RangedInputStream extends InputStream {
 	    if (this.chunkLength > 0)
 	        read = Math.min(read, (int) (this.chunkLength - this.chunkPosition));
 	    
-	    read = this.current.read(buffer, position + offs, read);
+	    try {
+		read = this.current.read(buffer, position + offs, read);
+	    } catch (EOFException ex) {
+	        read = -1;
+	    } catch (IOException ex) {
+		Logger.getGlobal().log(Level.WARNING, "Broken stream while reading " + read + " bytes from " + this.current
+				+ " [" + chunkPosition + "/" + chunkLength + "]", ex);
+	   
+		try {
+		    this.current.close();
+		} catch (IOException suppress) {
+		    ex.addSuppressed(suppress);
+		}
+	 
+		this.current = null;
+	        continue;
+	    }
 	    
 	    if (read > 0) {
 		position += read;
