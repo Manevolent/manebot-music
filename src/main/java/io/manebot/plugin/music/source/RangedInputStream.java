@@ -5,19 +5,16 @@
 
 package io.manebot.plugin.music.source;
 
-import org.apache.commons.io.*;
-
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
-import java.nio.*;
 import java.util.Map;
-import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class RangedInputStream extends InputStream {
+    private static final int EOF = -1;
     private static final Pattern rangePattern = Pattern.compile("(\\w+)\\s(\\d+)-(\\d+)\\/([\\d*]+)");
     private final URL url;
     private final Map<String, String> requestProperties;
@@ -25,11 +22,11 @@ public class RangedInputStream extends InputStream {
     private Long contentLength;
     private Boolean supportsRangeRequests;
     
-    private long currentPosition;
+    private long chunkPosition;
     private BufferedInputStream current;
-    private long currentChunkSize;
+    private long chunkLength;
     
-    private long position;
+    private long contentPosition;
     
     public RangedInputStream(URL url, Map<String, String> requestProperties, int bufferSize) {
 	this.url = url;
@@ -55,7 +52,7 @@ public class RangedInputStream extends InputStream {
 	    if (this.supportsRangeRequests != null && this.supportsRangeRequests) {
 		httpURLConnection.setRequestProperty(
 				"Range",
-				"bytes=" + this.position + "-" + (Math.min(this.position + (long) chunkSize, this.contentLength) - 1)
+				"bytes=" + this.contentPosition + "-" + (Math.min(this.contentPosition + (long) chunkSize, this.contentLength) - 1)
 		);
 	    }
 	    
@@ -77,12 +74,12 @@ public class RangedInputStream extends InputStream {
 			    }
 			}
 			
-			if (this.position != 0L) {
-			    throw new IOException("Unexpected content start at position 0 when content position is " + this.position);
+			if (this.contentPosition != 0L) {
+			    throw new IOException("Unexpected content start at position 0 when content position is " + this.contentPosition);
 			}
 		 
 			BufferedInputStream wholeBis = createBufferedStream(connection.getInputStream(), chunkSize);
-			this.currentChunkSize = this.contentLength;
+			this.chunkLength = this.contentLength;
 			return wholeBis;
 		    case 204:
 			throw new EOFException("HTTP 204 No Content");
@@ -98,8 +95,8 @@ public class RangedInputStream extends InputStream {
 			}
 			
 			long start = Long.parseLong(matcher.group(2));
-			if (start != this.position) {
-			    throw new IOException("Expected ranged start at position " + this.position +
+			if (start != this.contentPosition) {
+			    throw new IOException("Expected ranged start at position " + this.contentPosition +
 					    ", but server sent range starting at position " + start);
 			}
 			
@@ -124,11 +121,11 @@ public class RangedInputStream extends InputStream {
 			        throw new IOException("Problem reading content length", ex);
 			}
 		 
-			if (position + length > this.contentLength)
-			    throw new IOException("Unexpected content length: " + (position + length) + " > " + this.contentLength);
+			if (contentPosition + length > this.contentLength)
+			    throw new IOException("Unexpected content length: " + (contentPosition + length) + " > " + this.contentLength);
 			
 			BufferedInputStream rangeBis = createBufferedStream(connection.getInputStream(), (int) length);
-			this.currentChunkSize = length;
+			this.chunkLength = length;
 			return rangeBis;
 		}
 	    }
@@ -137,7 +134,7 @@ public class RangedInputStream extends InputStream {
 			    + " " + httpURLConnection.getResponseMessage());
 	} else {
 	    BufferedInputStream bis = createBufferedStream(connection.getInputStream(), (int) chunkSize);
-	    this.currentChunkSize = -1L;
+	    this.chunkLength = -1L;
 	    return bis;
 	}
     }
@@ -154,33 +151,37 @@ public class RangedInputStream extends InputStream {
     
     @Override
     public int read(byte[] buffer, int offs, int len) throws IOException {
-	if (this.contentLength != null && this.position >= this.contentLength) {
+	if (this.contentLength != null && this.contentPosition >= this.contentLength) {
 	    return -1;
 	}
  
 	int position = 0;
 	while (position < len) {
-	    if (contentLength != null && this.position >= this.contentLength)
+	    if (this.contentLength != null && this.contentPosition >= this.contentLength)
 	        return position > 0 ? position : -1;
 	    
 	    if (this.current == null) {
 		try {
 		    this.current = this.next(this.bufferSize);
-		    this.currentPosition = 0L;
+		    this.chunkPosition = 0L;
 		} catch (EOFException var2) {
 		    return -1;
 		}
 	    }
 	    
-	    int read = this.current.read(buffer, position + offs, len - position);
+	    int read = len - position;
+	    if (this.chunkLength > 0)
+	        read = Math.min(read, (int) (this.chunkLength - this.chunkPosition));
+	    
+	    read = this.current.read(buffer, position + offs, read);
 	    
 	    if (read > 0) {
 		position += read;
-		this.position += read;
-		this.currentPosition += read;
+		this.contentPosition += read;
+		this.chunkPosition += read;
 	    }
 	    
-	    if (read == -1 || (currentChunkSize >= 0L && this.currentPosition >= currentChunkSize)) {
+	    if (read == EOF || (this.chunkLength >= 0L && this.chunkPosition >= this.chunkLength)) {
 	        try {
 		    this.current.close();
 		} catch (IOException ignored) {
