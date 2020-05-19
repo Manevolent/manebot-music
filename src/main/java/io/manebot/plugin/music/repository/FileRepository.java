@@ -82,5 +82,11 @@ public class FileRepository extends AbstractRepository {
         public void delete() {
             if (!file.delete()) throw new IllegalStateException();
         }
+
+
+        @Override
+        public String toString() {
+            return "file:" + file.getAbsolutePath();
+        }
     }
 }

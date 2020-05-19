@@ -230,7 +230,7 @@ public class Music implements PluginReference {
             else {
                 if (!(resource.getRepository() instanceof NullRepository))
                     getPlugin().getLogger().log(Level.WARNING, "Database result exists for track " + databaseResult.getUrl() + ", but no resource " +
-                                    "exists for repository " + resource.getRepository().getClass().getName() + ".");
+                                    "exists in repository " + resource.getRepository().getClass().getName() + ": " + resource.toString());
                 return null;
             }
         } else return null;
@@ -543,7 +543,7 @@ public class Music implements PluginReference {
             if (result.isLocal() && resource.exists())
                 provider = protocol.openProvider(resource.openRead());
             else if (!downloading)
-                throw new IllegalStateException("cannot stream track: streaming/downloading was not allowed");
+                throw new IllegalArgumentException("cannot stream track: streaming/downloading was not allowed");
             else {
                 provider = result.openProvider(protocol);
 
@@ -644,7 +644,7 @@ public class Music implements PluginReference {
                             public void onFadeOut() {
                                 if (fadeOut != null)
                                     fadeOut.accept(track);
-                                
+
                                 getPlugin().getBot().getEventDispatcher().execute(new TrackFadeEvent(this, Music.this, track));
                             }
 
@@ -663,7 +663,7 @@ public class Music implements PluginReference {
 
                                 double start = end - timePlayedInSeconds;
                                 track.addPlayAsync(conversation, userAssociation.getUser(), start, end);
-                                
+
                                 getPlugin().getBot().getEventDispatcher().execute(new TrackFinshedEvent(this, Music.this, track, timePlayedInSeconds));
                             }
                         }
@@ -672,11 +672,10 @@ public class Music implements PluginReference {
                 final Play play = new Play(Music.this, track, channel, conversation, player);
                 player.getFuture().thenRun(() -> playingTracks.remove(channel, play));
 
-                try (AudioChannel.Ownership ownership = channel.obtainChannel(userAssociation)) {
+                try (AudioChannel.Ownership ignored = channel.obtainChannel(userAssociation)) {
                     if (exclusive) stop(userAssociation, channel);
-                    if (channel.addPlayer(player)) {
-                        playingTracks.put(channel, play);
-                    } else throw new IllegalStateException();
+                    channel.addPlayer(player);
+                    playingTracks.put(channel, play);
                 }
 
                 return play;
@@ -710,15 +709,14 @@ public class Music implements PluginReference {
         }
 
         @Override
-        public TrackSource.Result find(SearchResult<Track> searchResult)
-                throws IllegalStateException, NoSuchElementException {
+        public TrackSource.Result find(SearchResult<Track> searchResult) throws IllegalArgumentException {
             try {
                 return Music.this.findTrack(community, searchResult.getResults().stream()
                         .reduce((a, b) -> {
-                            throw new IllegalStateException("more than 1 result found");
+                            throw new IllegalArgumentException("more than 1 result found");
                         })
                         .map(Track::toURL)
-                        .orElseThrow(() -> new NoSuchElementException("no results found")));
+                        .orElseThrow(() -> new IllegalArgumentException("no results found")));
             } catch (IOException | TrackDownloadException e) {
                 throw new IllegalArgumentException("Problem finding track", e);
             }

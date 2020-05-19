@@ -53,13 +53,13 @@ public class Track extends TimedRow {
 
     public Track(Database database, URL url, Community community, Double length, String name, User user) {
         this(database);
-        
+
         this.uuid = Repository.toUUID(url);
         this.url = url.toExternalForm();
         this.community = community;
         this.length = length;
         this.name = name;
-        
+
         if (user instanceof io.manebot.database.model.User)
             this.user = (io.manebot.database.model.User) user;
     }
