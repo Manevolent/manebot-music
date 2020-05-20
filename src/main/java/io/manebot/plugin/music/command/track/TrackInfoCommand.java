@@ -11,10 +11,12 @@ import io.manebot.database.search.Search;
 import io.manebot.plugin.music.Music;
 import io.manebot.plugin.music.database.model.Community;
 import io.manebot.plugin.music.database.model.Track;
+import io.manebot.tuple.Pair;
 
 import java.net.URL;
 import java.sql.SQLException;
 
+import java.util.HashMap;
 import java.util.stream.Collectors;
 
 public class TrackInfoCommand extends AnnotatedCommandExecutor {
@@ -77,7 +79,7 @@ public class TrackInfoCommand extends AnnotatedCommandExecutor {
             builder.name("Track").key(track.getName());
             builder.item("Downloaded",
                     (track.getUser() != null ? "by " + track.getUser() + " on " : "")
-                    + track.getCreatedDate().toString()
+                            + track.getCreatedDate().toString()
             );
             builder.item("URL", track.getUrlString());
             if (track.getLength() != null) builder.item("Duration", track.getTimeSignature());
@@ -87,12 +89,17 @@ public class TrackInfoCommand extends AnnotatedCommandExecutor {
                             (track.getLikes() != 0 || track.getDislikes() != 0 ?
                                     " (" + track.getLikes() + " likes | " + track.getDislikes() + " dislikes)" : "")
             );
-            builder.item("Tags",
-                    track.getTags().stream()
-                            .map(trackTag -> trackTag.getTag().getName())
-                            .distinct()
-                            .collect(Collectors.toList())
-            );
+
+            builder.item("Tags", track.getTags().stream()
+                    .collect(Collectors.groupingBy(t -> t.getTag().getName())).entrySet().stream()
+                    .map(entry -> new Pair<>(
+                            entry.getKey().toLowerCase(),
+                            String.join(", ", entry.getValue().stream()
+                                    .map(t -> t.getUser().getDisplayName())
+                                    .collect(Collectors.toSet())
+                            )
+                    )).map(entry -> entry.getLeft() + " (" + entry.getRight() + ")")
+                    .collect(Collectors.toList()));
         });
     }
 }

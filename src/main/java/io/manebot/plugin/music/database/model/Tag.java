@@ -37,7 +37,7 @@ public class Tag extends TimedRow {
 
     public Tag(Database database,
                String name,
-               User owner) {
+               io.manebot.user.User owner) {
         this(database);
 
         this.name = name;

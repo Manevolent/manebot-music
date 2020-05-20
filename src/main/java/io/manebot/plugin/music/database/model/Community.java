@@ -99,7 +99,7 @@ public class Community extends TimedRow {
                                 .getResultStream().findFirst().orElse(null);
 
                         if (tag == null) {
-                            tag = new Tag(database, tagName, (User) builder.getUser());
+                            tag = new Tag(database, tagName, builder.getUser());
                             s.persist(tag);
                         }
 

@@ -6,12 +6,16 @@ import io.manebot.database.Database;
 import io.manebot.database.model.Platform;
 import io.manebot.plugin.music.repository.NullRepository;
 import io.manebot.plugin.music.repository.Repository;
+import io.manebot.user.User;
+import io.manebot.virtual.Virtual;
 
 import java.net.URL;
 import java.sql.SQLException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public final class MusicManager {
     private final Database database;
@@ -140,5 +144,45 @@ public final class MusicManager {
                     )
                     .getResultStream().findFirst().orElse(null);
         });
+    }
+
+    public Set<Tag> getOrCreateTags(Set<String> tagNames) {
+        try {
+            return database.executeTransaction(s -> {
+                return tagNames.stream().map(tagName -> {
+                    Tag tag = s.createQuery(
+                            "SELECT x FROM " + Tag.class.getName() + " x " +
+                                    "WHERE x.name = :name",
+                            Tag.class
+                    ).setParameter("name", tagName).setMaxResults(1)
+                            .getResultStream().findFirst().orElse(null);
+
+                    if (tag == null) {
+                        tag = new Tag(database, tagName, Virtual.getInstance().currentUser());
+                        s.persist(tag);
+                    }
+
+                    return tag;
+                }).collect(Collectors.toSet());
+            });
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Set<Tag> getTags(Set<String> tagNames) {
+        try {
+            return database.executeTransaction(s -> {
+                return tagNames.stream().map(tagName -> s.createQuery(
+                        "SELECT x FROM " + Tag.class.getName() + " x " +
+                                "WHERE x.name = :name",
+                        Tag.class
+                ).setParameter("name", tagName).setMaxResults(1).getResultStream().findFirst().orElse(null))
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+            });
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

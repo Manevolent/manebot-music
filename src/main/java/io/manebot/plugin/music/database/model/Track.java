@@ -24,6 +24,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 @javax.persistence.Entity
 @Table(
@@ -294,7 +295,78 @@ public class Track extends TimedRow {
     public UUID getUUID() {
         return uuid;
     }
-    
+
+    /**
+     * Adds a series of tags to this track.
+     * @param tags a distinct set of tags to add.
+     * @return a set of track tags that were added to the track.
+     */
+    public Set<TrackTag> addTags(Set<Tag> tags) {
+        try {
+            io.manebot.database.model.User user = (io.manebot.database.model.User)
+                    Objects.requireNonNull(Virtual.getInstance().currentUser(), "user");
+
+            return database.executeTransaction(s -> {
+                return tags.stream().map(tag -> {
+                    TrackTag trackTag = s.createQuery(
+                            "SELECT x FROM " + TrackTag.class.getName() +" x " +
+                                    "WHERE x.track.trackId = :trackId " +
+                                    "AND x.tag.tagId = :tagId " +
+                                    "AND x.user.userId = :userId",
+                            TrackTag.class
+                    ).setParameter("trackId", getTrackId()).setParameter("tagId", tag.getTagId())
+                            .setParameter("userId", user.getUserId())
+                            .getResultStream().findFirst().orElse(null);
+
+                    if (trackTag == null) {
+                        trackTag = new TrackTag(database, this, tag, user);
+                        s.persist(trackTag);
+                    } else {
+                        return null; // Don't return this tag instance as we didn't make it just now
+                    }
+
+                    return trackTag;
+                }).filter(Objects::nonNull).collect(Collectors.toSet());
+            });
+        } catch (SQLException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    /**
+     * Removes a series of tags to this track.
+     * @param tags a distinct set of tags to remove.
+     * @return a set of track tags that were removed from the track.
+     */
+    public Set<TrackTag> removeTags(Set<Tag> tags) {
+        io.manebot.database.model.User user = (io.manebot.database.model.User)
+                Objects.requireNonNull(Virtual.getInstance().currentUser(), "user");
+
+        try {
+            return database.executeTransaction(s -> {
+                return tags.stream().map(tag -> {
+                    TrackTag trackTag = s.createQuery(
+                            "SELECT x FROM " + TrackTag.class.getName() +" x " +
+                                    "WHERE x.track.trackId = :trackId " +
+                                    "AND x.tag.tagId = :tagId " +
+                                    "AND x.user.userId = :userId",
+                            TrackTag.class
+                    ).setParameter("trackId", getTrackId()).setParameter("tagId", tag.getTagId())
+                            .setParameter("userId", user.getUserId())
+                            .getResultStream().findFirst().orElse(null);
+
+                    if (trackTag != null) {
+                        s.remove(trackTag);
+                    }
+
+                    return trackTag;
+                }).filter(Objects::nonNull).collect(Collectors.toSet());
+            });
+        } catch (SQLException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
     /**
      * The Builder is responsible for constructing a track.  This class is used by the TrackSource API implementors to
      * abstractly supply their source-specific metadata (e.g. YouTube tags) into a track instance during its
