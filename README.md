@@ -35,11 +35,20 @@ The `track` command is used to manipluate tracks (e.g. YouTube videos, internet 
 ```
 track info
 track info http://youtu.be/something
+
 track play http://youtu.be/something
 track play "videos with this in the title"
+
 track search "videos with this in the title"
 track search "videos with this in the title" page:2
 track search
+
+track tag music
+track tag unwanted
+track untag unwanted
+
+playlist start
+playlist start music
 ```
 
 Consider making **aliases** for these commands using the `alias` command itself:
