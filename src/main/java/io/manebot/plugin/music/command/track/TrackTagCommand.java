@@ -14,6 +14,7 @@ import io.manebot.security.Grant;
 import io.manebot.security.Permission;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -44,6 +45,20 @@ public class TrackTagCommand implements CommandExecutor {
 
     private void tag(CommandSender sender, Track track, Set<String> tagNames) throws CommandArgumentException {
         tagNames = tagNames.stream().map(String::toLowerCase).collect(Collectors.toSet());
+
+        Collection<String> nonAlphanumericTagNames =
+                tagNames.stream().filter(tagName -> !tagName.matches("^[a-zA-Z0-9_.]+$")).collect(Collectors.toSet());
+        if (nonAlphanumericTagNames.size() > 0) {
+            throw new CommandArgumentException("Tag name(s) not alphanumeric: " +
+                    String.join(", ", nonAlphanumericTagNames) + ".");
+        }
+
+        Collection<String> longTagNames =
+                tagNames.stream().filter(tagName -> tagName.length() > 12).collect(Collectors.toSet());
+        if (longTagNames.size() > 0) {
+            throw new CommandArgumentException("Tag name(s) more than 12 characters: " +
+                    String.join(", ", longTagNames) + ".");
+        }
 
         Set<Tag> tags = music.getMusicManager().getOrCreateTags(tagNames);
         Set<TrackTag> added = track.addTags(tags);
