@@ -46,9 +46,6 @@ track search
 track tag music
 track tag unwanted
 track untag unwanted
-
-playlist start
-playlist start music
 ```
 
 Consider making **aliases** for these commands using the `alias` command itself:
@@ -71,8 +68,8 @@ Starts a playlist using a *query*, and manages a running playlist.
 ```
 playlist
 playlist info
-playlist start tag
-playlist start "videos with this in the title" -tag
+playlist start music
+playlist start "non-music title" -music
 ```
 
 ## Track queries
