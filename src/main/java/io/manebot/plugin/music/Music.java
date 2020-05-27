@@ -723,6 +723,18 @@ public class Music implements PluginReference {
         }
 
         @Override
+        public TrackSource.Result findFirst(SearchResult<Track> searchResult) throws IllegalArgumentException {
+            try {
+                return Music.this.findTrack(community, searchResult.getResults().stream()
+                        .map(Track::toURL)
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalArgumentException("no results found")));
+            } catch (IOException | TrackDownloadException e) {
+                throw new IllegalArgumentException("Problem finding track", e);
+            }
+        }
+
+        @Override
         public TrackSource.Result find(Track track) throws IllegalArgumentException {
             return find(track.toURL());
         }

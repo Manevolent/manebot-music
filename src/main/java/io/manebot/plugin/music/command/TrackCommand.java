@@ -13,6 +13,7 @@ public class TrackCommand extends RoutedCommandExecutor {
         route("info", new TrackInfoCommand(music, database)).asNullRoute();
         route("tag", new TrackTagCommand(music, database));
         route("untag", new TrackUntagCommand(music, database));
+        route("random", new TrackRandomCommand(music, database));
     }
 
     @Override

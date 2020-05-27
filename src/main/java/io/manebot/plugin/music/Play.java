@@ -119,6 +119,7 @@ public class Play {
     public interface TrackSelector {
         TrackSource.Result find(URL url) throws IllegalArgumentException;
         TrackSource.Result find(SearchResult<Track> searchResult) throws IllegalArgumentException;
+        TrackSource.Result findFirst(SearchResult<Track> searchResult) throws IllegalArgumentException;
         TrackSource.Result find(Track track) throws IllegalArgumentException;
     }
 }
