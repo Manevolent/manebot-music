@@ -35,11 +35,17 @@ The `track` command is used to manipluate tracks (e.g. YouTube videos, internet 
 ```
 track info
 track info http://youtu.be/something
+
 track play http://youtu.be/something
 track play "videos with this in the title"
+
 track search "videos with this in the title"
 track search "videos with this in the title" page:2
 track search
+
+track tag music
+track tag unwanted
+track untag unwanted
 ```
 
 Consider making **aliases** for these commands using the `alias` command itself:
@@ -62,8 +68,8 @@ Starts a playlist using a *query*, and manages a running playlist.
 ```
 playlist
 playlist info
-playlist start tag
-playlist start "videos with this in the title" -tag
+playlist start music
+playlist start "non-music title" -music
 ```
 
 ## Track queries
