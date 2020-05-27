@@ -46,6 +46,9 @@ track search
 track tag music
 track tag unwanted
 track untag unwanted
+
+track random
+track random "videos with this in the title"
 ```
 
 Consider making **aliases** for these commands using the `alias` command itself:
