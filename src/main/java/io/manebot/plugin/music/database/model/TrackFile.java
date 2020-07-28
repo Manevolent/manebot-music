@@ -2,9 +2,11 @@ package io.manebot.plugin.music.database.model;
 
 import io.manebot.database.Database;
 import io.manebot.database.model.TimedRow;
+import io.manebot.plugin.music.repository.Repository;
 
 import javax.persistence.*;
 
+import java.io.IOException;
 import java.sql.SQLException;
 import java.util.UUID;
 
@@ -71,6 +73,21 @@ public class TrackFile extends TimedRow {
                 trackFile.format = format;
                 trackFile.setUpdated(System.currentTimeMillis());
                 return trackFile.format;
+            });
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void delete() throws IOException {
+        try {
+            database.executeTransaction(s -> {
+                s.remove(s.find(TrackFile.class, getFileId()));
+
+                Repository.Resource resource = getTrackRepository().getInstance().get(getUuid());
+                if (resource != null && resource.exists()) {
+                    resource.delete();
+                }
             });
         } catch (SQLException e) {
             throw new RuntimeException(e);

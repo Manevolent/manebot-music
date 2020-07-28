@@ -37,7 +37,8 @@ import java.util.stream.Collectors;
                 @Index(columnList = "dislikes"),
                 @Index(columnList = "plays"),
                 @Index(columnList = "score"),
-                @Index(columnList = "userId")
+                @Index(columnList = "userId"),
+                @Index(columnList = "deleted")
         },
         uniqueConstraints = {
                 @UniqueConstraint(columnNames ={"communityId","url"}),
@@ -97,6 +98,9 @@ public class Track extends TimedRow {
 
     @Column(nullable = false)
     private int plays;
+
+    @Column(nullable = false)
+    private boolean deleted;
 
     @ManyToOne(optional = true)
     @JoinColumn(name = "userId")
@@ -178,8 +182,21 @@ public class Track extends TimedRow {
         }
     }
 
-    public void delete() {
-        throw new UnsupportedOperationException();
+    public boolean isDeleted() {
+        return deleted;
+    }
+
+    public void setDeleted(boolean deleted) {
+        try {
+            this.deleted = database.executeTransaction(s -> {
+                Track track = s.find(Track.class, getTrackId());
+                track.deleted = deleted;
+                track.setUpdated(System.currentTimeMillis());
+                return deleted;
+            });
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public int getLikes() {
@@ -275,6 +292,16 @@ public class Track extends TimedRow {
                             "WHERE x.track.trackId = :trackId",
                     TrackTag.class
             ).setParameter("trackId", getTrackId()).getResultList();
+        });
+    }
+
+    public Collection<TrackFile> getFiles() {
+        return database.execute(s -> {
+            return s.createQuery(
+                    "SELECT x FROM " + TrackFile.class.getName() +" x " +
+                            "WHERE x.uuid = :uuid",
+                    TrackFile.class
+            ).setParameter("uuid", getUUID()).getResultList();
         });
     }
 
@@ -590,14 +617,17 @@ public class Track extends TimedRow {
             ));
 
             builder.always((clause) -> {
-
                 clause.addPredicate(SearchOperator.MERGE, clause.getCriteriaBuilder().equal(
                         clause.getRoot().get("community").get("communityId"),
                         community.getCommunityId()
                 ));
 
-                always.accept(clause);
+                clause.addPredicate(SearchOperator.MERGE, clause.getCriteriaBuilder().equal(
+                        clause.getRoot().get("deleted"),
+                        false
+                ));
 
+                always.accept(clause);
             });
 
             return builder.build();

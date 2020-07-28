@@ -14,6 +14,7 @@ public class TrackCommand extends RoutedCommandExecutor {
         route("tag", new TrackTagCommand(music, database));
         route("untag", new TrackUntagCommand(music, database));
         route("random", new TrackRandomCommand(music, database));
+        route("delete", new TrackDeleteCommand(music, database));
     }
 
     @Override

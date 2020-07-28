@@ -172,7 +172,7 @@ public class TrackRepository extends TimedRow {
                     instance = (Repository) clazz.getConstructor(TrackRepository.class).newInstance(this);
                 } catch (ReflectiveOperationException e) {
                     throw new RuntimeException(
-                            "Problem instantiating TrackRepository instance for " +
+                            "Problem instantiating " + Repository.class.getName() + " instance for " +
                             name
                             + " (" + getType() + ")",
                             e

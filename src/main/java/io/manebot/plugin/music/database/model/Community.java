@@ -55,7 +55,7 @@ public class Community extends TimedRow {
     }
 
     public Track getTrack(URL url) {
-        return database.execute(s -> {
+        Track track = database.execute(s -> {
             return s.createQuery(
                     "SELECT x FROM " + Track.class.getName() + " x " +
                             "INNER JOIN x.community c " +
@@ -67,6 +67,12 @@ public class Community extends TimedRow {
                     .findFirst()
                     .orElse(null);
         });
+
+        if (track.isDeleted()) {
+            throw new IllegalArgumentException("Track is deleted.");
+        }
+
+        return track;
     }
 
     public Track getOrCreateTrack(URL url, Consumer<Track.Builder> constructor) {
