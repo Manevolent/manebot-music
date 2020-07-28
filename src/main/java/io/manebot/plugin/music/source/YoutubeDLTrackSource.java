@@ -164,6 +164,9 @@ public class YoutubeDLTrackSource implements TrackSource {
 
         // download metadata
         JsonObject response = getJsonMetadata(url);
+
+        String extractor = response.has("extractor") ?
+                response.get("extractor").getAsString() : "unknown";
     
         // track url
         String urlString = response.has("webpage_url") ?
@@ -193,12 +196,10 @@ public class YoutubeDLTrackSource implements TrackSource {
             duration = null; // pod-cast? live video?
 
         List<FormatOption> formatOptions = new LinkedList<>();
-        
-
         if (!response.has("formats") || response.get("formats").isJsonNull()) {
             if (response.get("direct").getAsBoolean()) {
                 FormatOption formatOption = new FormatOption(
-                                false, realUri, 0L, 0D, 0D,
+                        Integer.MAX_VALUE, false, realUri, 0L, 0D, 0D,
                                 response.get("ext").getAsString(), "direct", null, null, DEFAULT_BUFFER_SIZE
                 );
                 if (response.has("http_headers"))
@@ -207,7 +208,7 @@ public class YoutubeDLTrackSource implements TrackSource {
 
                 formatOptions.add(formatOption);
             } else {
-                throw new TrackDownloadException("JSON result has no \"formats\" property");
+                throw new TrackDownloadException("JSON result has no \"formats\" property, and media is not direct");
             }
         } else {
             response.get("formats").getAsJsonArray().forEach((x) -> {
@@ -244,24 +245,31 @@ public class YoutubeDLTrackSource implements TrackSource {
                         bufferSize = downloaderOptions.get("http_chunk_size").getAsInt();
                     }
                 }
-    
+
+                int preference;
+                if (object.has("preference") && !object.get("preference").isJsonNull())
+                    preference = object.get("preference").getAsInt();
+                else
+                    preference = Integer.MAX_VALUE;
+
                 FormatOption formatOption = new FormatOption(
-                                protocol != null && live_protocols.contains(protocol),
-                                downloadUri,
-                                object.has("filesize") && !object.get("filesize").isJsonNull() ?
-                                                object.get("filesize").getAsLong() : 0,
-                                object.has("abr") && !object.get("abr").isJsonNull() ?
-                                                object.get("abr").getAsDouble() : 0D,
-                                object.has("vbr") && !object.get("vbr").isJsonNull() ?
-                                                object.get("vbr").getAsDouble() : 0D,
-                                format,
-                                object.has("format_note") && !object.get("format_note").isJsonNull() ?
-                                                object.get("format_note").getAsString().trim() : null,
-                                object.has("acodec") && !object.get("acodec").isJsonNull() ?
-                                                object.get("acodec").getAsString().trim() : null,
-                                object.has("vcodec") && !object.get("vcodec").isJsonNull() ?
-                                                object.get("vcodec").getAsString().trim() : null,
-                                bufferSize
+                        preference,
+                        protocol != null && live_protocols.contains(protocol),
+                        downloadUri,
+                        object.has("filesize") && !object.get("filesize").isJsonNull() ?
+                                object.get("filesize").getAsLong() : 0,
+                        object.has("abr") && !object.get("abr").isJsonNull() ?
+                                object.get("abr").getAsDouble() : 0D,
+                        object.has("vbr") && !object.get("vbr").isJsonNull() ?
+                                object.get("vbr").getAsDouble() : 0D,
+                        format,
+                        object.has("format_note") && !object.get("format_note").isJsonNull() ?
+                                object.get("format_note").getAsString().trim() : null,
+                        object.has("acodec") && !object.get("acodec").isJsonNull() ?
+                                object.get("acodec").getAsString().trim() : null,
+                        object.has("vcodec") && !object.get("vcodec").isJsonNull() ?
+                                object.get("vcodec").getAsString().trim() : null,
+                        bufferSize
                 );
 
                 if (object.has("http_headers"))
@@ -273,26 +281,38 @@ public class YoutubeDLTrackSource implements TrackSource {
         }
 
         // Select the optimal format for acquisition
-        FormatOption selectedFormat = null;
+        FormatOption selectedFormat;
+
         if (formatOptions.size() == 1) {
             selectedFormat = formatOptions.get(0);
         } else if (formatOptions.size() > 1) {
-            // We want the highest bitrate, but the lowest filesize.
-            // YouTube throttles the DASH audio options so we totally exclude those from the results
-            // Then, we look for options which explicitly provide an audio codec and a bitrate for that codec
-            // And then, we descend by abr, then ascend by the file size
-            // First option is the video we want
-            selectedFormat = formatOptions.stream()
-                    .filter(x -> x.getNote() == null || !x.getNote().equals("DASH audio"))
-                    .filter(x -> x.getAudioBitrate() > 0)
-                    .min(((Comparator<FormatOption>)
-                            (a, b) -> Double.compare(b.getAudioBitrate(), a.getAudioBitrate()))
-                            .thenComparingLong(FormatOption::getFilesize)
-                    ).orElse(null);
+            if (formatOptions.stream().anyMatch(format -> format.getAudioBitrate() > 0)) {
+                // We want the highest bitrate, but the lowest filesize.
+                // YouTube throttles the DASH audio options so we totally exclude those from the results
+                // Then, we look for options which explicitly provide an audio codec and a bitrate for that codec
+                // And then, we descend by abr, then ascend by the file size
+                // First option is the video we want
+                selectedFormat = formatOptions.stream()
+                        .filter(x -> x.getNote() == null || !x.getNote().equals("DASH audio"))
+                        .filter(x -> x.getAudioBitrate() > 0)
+                        .min(((Comparator<FormatOption>)
+                                (a, b) -> Double.compare(b.getAudioBitrate(), a.getAudioBitrate()))
+                                .thenComparingLong(FormatOption::getFilesize)
+                        ).orElse(null);
+            } else {
+                // Best effort, just pick the first one sorted by "preference" value as a last resort
+                selectedFormat = formatOptions
+                        .stream()
+                        .min(Comparator.comparingInt(FormatOption::getPreference))
+                        .orElse(null);
+            }
+        } else {
+            throw new IllegalArgumentException("youtube-dl (" + extractor + ") offered no format(s)");
         }
         
         if (selectedFormat == null)
-            throw new IllegalArgumentException("JSON result offered no suitable format of " + formatOptions.size() + " results");
+            throw new IllegalArgumentException("youtube-dl (" + extractor + ") offered no suitable choice from " +
+                    formatOptions.size() + " format(s)");
 
         final FormatOption format = selectedFormat;
         return new DownloadResult(
@@ -325,6 +345,7 @@ public class YoutubeDLTrackSource implements TrackSource {
      * to efficiency ratio for quickly downloading tracks with youtube-dl with the least byte overhead.
      */
     private static class FormatOption {
+        private final int preference;
         private final boolean live;
         private final double audio_bitrate;
         private final double video_bitrate;
@@ -336,9 +357,11 @@ public class YoutubeDLTrackSource implements TrackSource {
         private final int bufferSize;
         private final Map<String, String> httpHeaders = new HashMap<>();
 
-        FormatOption(boolean live, URI uri, long filesize, double audio_bitrate, double video_bitrate, String format, String note, String audioCodec,
-                        String videoCodec,
-                        int bufferSize) {
+        FormatOption(int preference, boolean live, URI uri, long filesize, double audio_bitrate, double video_bitrate,
+                     String format, String note, String audioCodec,
+                     String videoCodec,
+                     int bufferSize) {
+            this.preference = preference;
             this.live = live;
             this.audio_bitrate = audio_bitrate;
             this.video_bitrate = video_bitrate;
@@ -399,6 +422,10 @@ public class YoutubeDLTrackSource implements TrackSource {
     
         public boolean isLive() {
             return live;
+        }
+
+        public int getPreference() {
+            return preference;
         }
     }
 }
