@@ -49,6 +49,9 @@ track untag unwanted
 
 track random
 track random "videos with this in the title"
+
+track delete
+track delete http://youtu.be/something
 ```
 
 Consider making **aliases** for these commands using the `alias` command itself:
