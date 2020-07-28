@@ -22,6 +22,9 @@ public class YoutubeDLTrackSource implements TrackSource {
     private static final Set<String> live_protocols = new LinkedHashSet<>();
     static {
         live_protocols.add("m3u8");
+
+        // https://github.com/ytdl-org/youtube-dl/pull/8643
+        live_protocols.add("m3u8_native");
     }
     
     private static final int DEFAULT_BUFFER_SIZE = 1024 * 1024;
@@ -276,12 +279,13 @@ public class YoutubeDLTrackSource implements TrackSource {
         } else if (formatOptions.size() > 1) {
             // We want the highest bitrate, but the lowest filesize.
             // YouTube throttles the DASH audio options so we totally exclude those from the results
-            // Then, we look for options which explicity provide an audio codec and a bitrate for that codec
+            // Then, we look for options which explicitly provide an audio codec and a bitrate for that codec
             // And then, we descend by abr, then ascend by the file size
             // First option is the video we want
             selectedFormat = formatOptions.stream()
                     .filter(x -> x.getNote() == null || !x.getNote().equals("DASH audio"))
-                    .filter(x -> x.getAudioBitrate() > 0).min(((Comparator<FormatOption>)
+                    .filter(x -> x.getAudioBitrate() > 0)
+                    .min(((Comparator<FormatOption>)
                             (a, b) -> Double.compare(b.getAudioBitrate(), a.getAudioBitrate()))
                             .thenComparingLong(FormatOption::getFilesize)
                     ).orElse(null);
