@@ -293,7 +293,8 @@ public class YoutubeDLTrackSource implements TrackSource {
                 // And then, we descend by abr, then ascend by the file size
                 // First option is the video we want
                 selectedFormat = formatOptions.stream()
-                        .filter(x -> x.getNote() == null || !x.getNote().equals("DASH audio"))
+                        .filter(x -> !extractor.equalsIgnoreCase("youtube") ||
+                                x.getNote() == null || !x.getNote().equals("DASH audio"))
                         .filter(x -> x.getAudioBitrate() > 0)
                         .min(((Comparator<FormatOption>)
                                 (a, b) -> Double.compare(b.getAudioBitrate(), a.getAudioBitrate()))
@@ -307,7 +308,7 @@ public class YoutubeDLTrackSource implements TrackSource {
                         .orElse(null);
             }
         } else {
-            throw new IllegalArgumentException("youtube-dl (" + extractor + ") offered no format(s)");
+            throw new IllegalArgumentException("youtube-dl (" + extractor + ") offered no formats");
         }
         
         if (selectedFormat == null)
