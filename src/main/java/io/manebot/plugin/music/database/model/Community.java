@@ -68,8 +68,8 @@ public class Community extends TimedRow {
                     .orElse(null);
         });
 
-        if (track.isDeleted()) {
-            throw new IllegalArgumentException("Track is deleted.");
+        if (track != null && track.isDeleted()) {
+            throw new IllegalArgumentException("Track was deleted.");
         }
 
         return track;
