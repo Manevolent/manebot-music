@@ -26,11 +26,15 @@ public class PlaylistSkipCommand implements CommandExecutor {
         if (channel.isIdle()) throw new CommandArgumentException("Cannot skip this channel.");
 
         Playlist playlist = music.getPlaylist(channel);
-        if (playlist.isRunning() && playlist.peek() == playlist.getCurrent())
+        if (playlist == null) {
+            if (music.getQueue(channel).isEmpty()) {
+                throw new CommandArgumentException("There are no tracks in the queue.");
+            }
+        } else if (playlist.isRunning() && playlist.peek() == playlist.getCurrent()) {
             throw new CommandArgumentException("Cannot skip this playlist.");
+        }
 
         boolean override = Permission.hasPermission("audio.stop.all");
-
         int stopped = 0;
         for (AudioPlayer player : channel.getPlayers()) {
             if (!player.isPlaying()) continue;
