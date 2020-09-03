@@ -8,15 +8,16 @@ import io.manebot.plugin.music.database.model.Community;
 import io.manebot.plugin.music.database.model.Track;
 import io.manebot.plugin.music.repository.Repository;
 import io.manebot.plugin.music.source.TrackSource;
+import io.manebot.user.User;
 import io.manebot.user.UserAssociation;
 
 import java.net.URL;
 import java.util.concurrent.Future;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
 public class Play {
+    private final UserAssociation user;
     private final Music music;
     private final Track track;
     private final AudioChannel channel;
@@ -26,7 +27,8 @@ public class Play {
     private final boolean queued;
     private final Future<Repository.Resource> cacheFuture;
 
-    Play(Music music,
+    Play(UserAssociation user,
+         Music music,
          Track track,
          AudioChannel channel,
          Conversation conversation,
@@ -34,6 +36,7 @@ public class Play {
          Behavior behavior,
          boolean queued,
          Future<Repository.Resource> cacheFuture) {
+        this.user = user;
         this.music = music;
         this.track = track;
         this.channel = channel;
@@ -78,6 +81,10 @@ public class Play {
      */
     public Future<Repository.Resource> getCacheFuture() {
         return cacheFuture;
+    }
+
+    public UserAssociation getUser() {
+        return user;
     }
 
     public interface Builder {

@@ -21,8 +21,8 @@ import io.manebot.plugin.PluginReference;
 import io.manebot.plugin.audio.*;
 import io.manebot.plugin.audio.channel.AudioChannel;
 
-import io.manebot.plugin.audio.event.channel.AudioChannelUserJoinEvent;
-import io.manebot.plugin.audio.event.channel.AudioChannelUserLeaveEvent;
+import io.manebot.plugin.audio.event.channel.AudioChannelUserDisconnectedEvent;
+import io.manebot.plugin.audio.event.channel.AudioChannelUserMoveEvent;
 import io.manebot.plugin.audio.mixer.input.AudioProvider;
 import io.manebot.plugin.audio.mixer.input.ResampledAudioProvider;
 import io.manebot.plugin.audio.mixer.output.*;
@@ -53,7 +53,6 @@ import java.net.URL;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.logging.*;
@@ -462,6 +461,8 @@ public class Music implements PluginReference, EventListener {
 
     @Override
     public void unload(Plugin.Future plugin) {
+        queues.clear();
+
         new ArrayList<>(getPlaylists()).forEach(playlist -> playlist.setRunning(false));
 
         new ArrayList<>(playingTracks.values()).forEach(association -> {
@@ -482,14 +483,33 @@ public class Music implements PluginReference, EventListener {
     }
 
     @EventHandler()
-    public void onUserLeave(AudioChannelUserLeaveEvent event) {
+    public void onUserLeave(AudioChannelUserDisconnectedEvent event) {
         PlatformUser platformUser = event.getPlatformUser();
-        if (platformUser != null) {
-            stop(platformUser.getAssociation(), event.getChannel(), false);
+        UserAssociation userAssociation = platformUser.getAssociation();
+
+        if (userAssociation != null) {
+            stop(userAssociation, event.getChannel(), false);
 
             // Also remove any queued tracks that belong to this user
             getQueue(event.getChannel())
                     .removeIf(item -> item.getLeft().getPlatformUser().equals(event.getPlatformUser()));
+        }
+    }
+
+    @EventHandler()
+    public void onUserMove(AudioChannelUserMoveEvent event) {
+        PlatformUser platformUser = event.getPlatformUser();
+        UserAssociation userAssociation = platformUser.getAssociation();
+        AudioChannel channel = event.getFromChannel();
+
+        if (userAssociation != null && event.hasLeft() && !event.wasFollowed()) {
+            Play play = playingTracks.get(channel);
+            if (play == null)
+                return;
+
+            if (play.getUser().equals(userAssociation)) {
+                event.follow();
+            }
         }
     }
 
@@ -631,7 +651,17 @@ public class Music implements PluginReference, EventListener {
 
                 // Define a uniform constructor routine to create an instance of a Play.
                 Function<AudioPlayer, Play> playConstructor = (player) ->
-                        new Play(Music.this, track, channel, conversation, player, behavior, player == null, cacheFuture);
+                        new Play(
+                                userAssociation,
+                                Music.this,
+                                track,
+                                channel,
+                                conversation,
+                                player,
+                                behavior,
+                                player == null,
+                                cacheFuture
+                        );
 
                 // Observing the behavior of the requested playback, handle playing the Track now or at a future time.
                 try (AudioChannel.Ownership ignored = channel.obtainChannel(userAssociation)) {
