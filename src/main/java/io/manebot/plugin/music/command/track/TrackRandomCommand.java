@@ -40,17 +40,20 @@ public class TrackRandomCommand extends AnnotatedCommandExecutor {
             throw new CommandExecutionException(e);
         }
 
-        Track track;
+        Play play;
 
         try {
-            track = music.play(sender.getPlatformUser().getAssociation(), sender.getConversation(), builder ->
+            play = music.play(sender.getPlatformUser().getAssociation(), sender.getConversation(), builder ->
                     builder.setTrack(trackSelector -> trackSelector.findFirst(searchResult))
                             .setBehavior(Play.Behavior.QUEUED)
-            ).getTrack();
+            );
         } catch (IOException e) {
             throw new CommandExecutionException(e);
         }
 
-        sender.sendMessage("(Playing \"" + track.getName() + "\")");
+        if (play.wasQueued())
+            sender.sendMessage("(Queued \"" + play.getTrack().getName() + "\")");
+        else
+            sender.sendMessage("(Playing \"" + play.getTrack().getName() + "\")");
     }
 }

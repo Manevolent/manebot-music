@@ -3,6 +3,7 @@ package io.manebot.plugin.music;
 import com.google.common.collect.Queues;
 import com.google.common.util.concurrent.*;
 import io.manebot.chat.Chat;
+import io.manebot.chat.ChatSender;
 import io.manebot.chat.TextStyle;
 import io.manebot.command.CommandSender;
 import io.manebot.command.exception.CommandAccessException;
@@ -605,7 +606,7 @@ public class Music implements PluginReference {
 
                 // Define a uniform constructor routine to create an instance of a Play.
                 Function<AudioPlayer, Play> playConstructor = (player) ->
-                        new Play(Music.this, track, channel, conversation, player, behavior, player != null, cacheFuture);
+                        new Play(Music.this, track, channel, conversation, player, behavior, player == null, cacheFuture);
 
                 // Observing the behavior of the requested playback, handle playing the Track now or at a future time.
                 try (AudioChannel.Ownership ignored = channel.obtainChannel(userAssociation)) {
@@ -783,11 +784,15 @@ public class Music implements PluginReference {
                                                     .setTrack(trackSelector -> trackSelector.find(track))
                                     );
 
+                                    ChatSender sender = userAssociation.getPlatformUser().createSender(conversation.getChat());
+                                    sender.sendMessage("(Playing \"" + track.getName() + "\")");
+
                                     break;
                                 } catch (IOException e) {
                                     String message = "Couldn't play queued track \"" + track.getName() + "\"";
                                     Logger.getGlobal().log(Level.WARNING, message, e);
-                                    conversation.getChat().sendMessage("(" + message + ")");
+                                    ChatSender sender = userAssociation.getPlatformUser().createSender(conversation.getChat());
+                                    sender.sendMessage("(" + message + " )");
                                 }
                             }
 
