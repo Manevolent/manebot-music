@@ -15,6 +15,7 @@ Please note that this plugin uses `youtube-dl` (https://rg3.github.io/youtube-dl
 * Uses the Manebot audio system (https://github.com/Manevolent/manebot-audio): cross-fading, low-CPU, high throughput audio playback and mixing on supported platforms (Teamspeak and Discord) via their respective Manebot plugins
 * Repository storage system to cache tracks offline for faster access
 * Complete playlist system designed around a powerful track search engine
+* Automatic track queueing system both when playlists are playing and when tracks are playing on their own
 * Independent track metadata isolated per designated community (i.e. Discord guilds), such as a like/dislike system, tags, and play counts.
 
 ### Installation
