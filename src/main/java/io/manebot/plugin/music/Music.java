@@ -619,7 +619,7 @@ public class Music implements PluginReference {
                     }
 
                     if (behavior == Play.Behavior.EXCLUSIVE || behavior == Play.Behavior.PASSIVE ||
-                            (behavior == Play.Behavior.QUEUED && channel.isIdle())) {
+                            (behavior == Play.Behavior.QUEUED && channel.getState() == AudioChannel.State.WAITING)) {
                         // Any case where we can immediately begin playback
                         // Create an audio player based on a provider and the track to play, and associate its future
                         // back to the Music singleton so we can track when it ends in this class.
