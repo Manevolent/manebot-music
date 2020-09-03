@@ -9,7 +9,7 @@ import io.manebot.plugin.music.database.model.TrackTag;
 public class TrackCommand extends RoutedCommandExecutor {
     public TrackCommand(Music music, Database database) {
         route("search", new TrackSearchCommand(music, database)).alias("s");
-        route("play", new TrackPlayCommand(music, database)).asDefaultRoute();
+        route("play", new TrackQueueCommand(music, database)).asDefaultRoute();
         route("info", new TrackInfoCommand(music, database)).asNullRoute();
         route("tag", new TrackTagCommand(music, database));
         route("untag", new TrackUntagCommand(music, database));

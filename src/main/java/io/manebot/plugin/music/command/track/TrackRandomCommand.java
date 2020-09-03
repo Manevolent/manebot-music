@@ -9,6 +9,7 @@ import io.manebot.database.Database;
 import io.manebot.database.search.Search;
 import io.manebot.database.search.SearchResult;
 import io.manebot.plugin.music.Music;
+import io.manebot.plugin.music.Play;
 import io.manebot.plugin.music.database.model.Community;
 import io.manebot.plugin.music.database.model.Track;
 
@@ -43,7 +44,8 @@ public class TrackRandomCommand extends AnnotatedCommandExecutor {
 
         try {
             track = music.play(sender.getPlatformUser().getAssociation(), sender.getConversation(), builder ->
-                    builder.setTrack(trackSelector -> trackSelector.findFirst(searchResult)).setExclusive(true)
+                    builder.setTrack(trackSelector -> trackSelector.findFirst(searchResult))
+                            .setBehavior(Play.Behavior.QUEUED)
             ).getTrack();
         } catch (IOException e) {
             throw new CommandExecutionException(e);

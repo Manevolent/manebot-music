@@ -11,6 +11,7 @@ import io.manebot.database.Database;
 import io.manebot.database.model.Platform;
 import io.manebot.database.search.Search;
 import io.manebot.database.search.SearchResult;
+import io.manebot.event.Event;
 import io.manebot.platform.PlatformUser;
 import io.manebot.plugin.Plugin;
 import io.manebot.plugin.PluginReference;
@@ -37,6 +38,7 @@ import io.manebot.plugin.music.repository.NullRepository;
 import io.manebot.plugin.music.repository.Repository;
 import io.manebot.plugin.music.source.*;
 import io.manebot.security.Permission;
+import io.manebot.tuple.Pair;
 import io.manebot.user.User;
 import io.manebot.user.UserAssociation;
 import io.manebot.user.UserType;
@@ -45,6 +47,8 @@ import java.io.*;
 import java.net.URL;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.logging.*;
@@ -53,6 +57,8 @@ import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 public class Music implements PluginReference {
+    private static final int transcodeBufferSize = 32768;
+
     private final Plugin plugin;
     private final Database database;
     private final MusicManager musicManager;
@@ -65,6 +71,7 @@ public class Music implements PluginReference {
     private final Map<Plugin, MusicRegistration> registrations = new LinkedHashMap<>();
     private final Map<AudioChannel, Play> playingTracks = new LinkedHashMap<>();
     private final Map<AudioChannel, Playlist> playlists = new LinkedHashMap<>();
+    private final Map<AudioChannel, BlockingQueue<Pair<UserAssociation, Track>>> queues = new LinkedHashMap<>();
 
     private final ExecutorService cacheExecutor;
     private final Map<Track, Future<Repository.Resource>> downloads = new LinkedHashMap<>();
@@ -169,6 +176,29 @@ public class Music implements PluginReference {
     public Playlist getPlaylist(AudioChannel channel) {
         if (channel == null) return null;
         return playlists.get(channel);
+    }
+
+    public BlockingQueue<Pair<UserAssociation, Track>> getQueue(CommandSender sender) {
+        if (sender == null) return null;
+        return getQueue(sender.getConversation());
+    }
+
+    public BlockingQueue<Pair<UserAssociation, Track>> getQueue(Conversation conversation) {
+        if (conversation == null) return null;
+        return getQueue(conversation.getChat());
+    }
+
+    public BlockingQueue<Pair<UserAssociation, Track>> getQueue(Chat chat) {
+        if (chat == null) return null;
+        return getQueue(audio.getChannel(chat));
+    }
+
+    public BlockingQueue<Pair<UserAssociation, Track>> getQueue(AudioChannel channel) {
+        if (channel == null) return null;
+        synchronized (queues) {
+            return queues.computeIfAbsent(channel,
+                    (ignored) -> new ArrayBlockingQueue<>(channel.getMaximumQueueSize()));
+        }
     }
 
     /**
@@ -374,7 +404,7 @@ public class Music implements PluginReference {
 
         Playlist playlist = builder.create();
 
-        try (AudioChannel.Ownership ownership = channel.obtainChannel(userAssociation)) {
+        try (AudioChannel.Ownership ignored = channel.obtainChannel(userAssociation)) {
             stop(userAssociation, channel);
 
             if (getPlaylist(channel) != null)
@@ -443,24 +473,22 @@ public class Music implements PluginReference {
         private final AudioChannel channel;
         private final Conversation conversation;
         private TrackSource.Result result = null;
-        private Consumer<Track> fadeOut = (track) -> {};
+        private BiConsumer<Track, Track> fadeOut = (track, nextTrack) -> {};
 
         /**
          * If the track should be cached in the repository it is retrieved on.
-         * This is usually the repository associated with the community, which is in turn associated with the conversation where the download is taking place.
-         * This is effectively the main flag that allows track caching in the bot.
+         * This is usually the repository associated with the community, which is in turn associated with the
+         * conversation where the download is taking place. This is effectively the main flag that allows track
+         * caching in the bot.
          */
         private boolean caching = true;
 
         /**
          * If the track can be downloaded from its remote URI as part of the retrieval process.
          */
-        private boolean downloading = true;
+        private boolean canDownload = true;
 
-        /**
-         * If the play event should be exclusive of the audio channel (i.e. stop other playing tracks).
-         */
-        private boolean exclusive = true;
+        private Play.Behavior behavior = Play.Behavior.EXCLUSIVE;
 
         private PlayBuilder(UserAssociation userAssociation,
                             Community community,
@@ -495,37 +523,37 @@ public class Music implements PluginReference {
         @Override
         public Play.Builder setTrack(Function<Play.TrackSelector, TrackSource.Result> selector)
                 throws IllegalArgumentException {
-            this.result = selector.apply(new TrackSelector(getCommunity()));
+            this.result = Objects.requireNonNull(selector).apply(new TrackSelector(getCommunity()));
             return this;
         }
 
         @Override
-        public Play.Builder setDownloading(boolean downloading) {
-            this.downloading = downloading;
+        public Play.Builder setCanDownload(boolean download) {
+            this.canDownload = download;
             return this;
         }
 
         @Override
-        public Play.Builder setCaching(boolean caching) {
+        public Play.Builder setShouldCache(boolean caching) {
             this.caching = caching;
             return this;
         }
 
         @Override
-        public Play.Builder setExclusive(boolean exclusive) {
-            this.exclusive = exclusive;
+        public Play.Builder setBehavior(Play.Behavior behavior) {
+            this.behavior = Objects.requireNonNull(behavior);
             return this;
         }
 
         @Override
-        public Play.Builder setFadeOut(Consumer<Track> fadeOut) {
+        public Play.Builder setFadeOut(BiConsumer<Track, Track> fadeOut) {
             this.fadeOut = fadeOut;
             return this;
         }
 
         private Play play() throws IOException {
-            Objects.requireNonNull(userAssociation);
-            Objects.requireNonNull(result);
+            Objects.requireNonNull(userAssociation, "User association is required");
+            Objects.requireNonNull(result, "Track is required");
 
             // Get the track. This may actually create a track, if needed.
             Track track = result.getTrack();
@@ -540,84 +568,30 @@ public class Music implements PluginReference {
             // writing to this Track's associated resource. If it does exist, we shouldn't save it to the cache twice.
             AudioProtocol protocol = getProtocol();
             AudioProvider provider;
-            if (result.isLocal() && resource.exists())
+
+            final Future<Repository.Resource> cacheFuture;
+
+            if (result.isLocal() && resource.exists()) {
                 provider = protocol.openProvider(resource.openRead());
-            else if (!downloading)
+                cacheFuture = null;
+            } else if (!canDownload)
                 throw new IllegalArgumentException("cannot stream track: streaming/downloading was not allowed");
             else {
                 provider = result.openProvider(protocol);
 
                 // Attempt to cache the track as well.
-                if (caching && resource.canWrite() && (track.getLength() != null && track.getLength() > 0) && cacheExecutor != null) {
-                    Callable<Repository.Resource> callable = () -> {
-                        try {
-                            int bufferSize = 32768;
-                            
-                            plugin.getLogger().fine(track.getUrlString() + ": transcoding to " + resource.getRepository().getClass() + "...");
-                            
-                            try (AudioProvider cachedAudioProvider = result.openProvider(protocol)) {
-                                AudioDownloadFormat downloadFormat = resource.getRepository().getDownloadFormat();
-                                try (Resampler resampler = protocol.openResampler(AudioFormat.from(cachedAudioProvider.getFormat()),
-                                                downloadFormat.getAudioFormat(), bufferSize)) {
-                                    try (AudioConsumer cachedAudioConsumer = protocol.openConsumer(resource.openWrite(), downloadFormat)) {
-                                        float[] in_buffer = new float[bufferSize];
-                                        float[] out_buffer = new float[(int) Math.ceil(bufferSize * (1 / resampler.getScale()))];
-                                        int len;
-                                        try {
-                                            while ((len = cachedAudioProvider.read(in_buffer, 0, in_buffer.length)) > 0) {
-                                                len = resampler.resample(in_buffer, len, out_buffer, out_buffer.length);
-                                                cachedAudioConsumer.write(out_buffer, len);
-                                            }
-                                        } catch (EOFException ignored) {
-                                            // ignore, this is normal
-                                        }
-                                        len = resampler.flush(out_buffer, out_buffer.length);
-                                        if (len > 0)
-                                            cachedAudioConsumer.write(out_buffer, len);
-                                    }
-                                }
-                            }
-    
-                            TrackRepository trackRepository = resource.getRepository().getTrackRepository();
-                            if (trackRepository.getFile(resource.getUUID()) == null)
-                                trackRepository.createFile(trackRepository, resource.getUUID(), resource.getFormat());
-                            
-                            getPlugin().getBot().getEventDispatcher().execute(new TrackDownloadedEvent(this, Music.this, track, resource));
-                            
-                            plugin.getLogger().fine(track.getUrlString() + ": transcode to " + resource.getRepository().getClass() + " completed");
-                        } catch (Exception e) {
-                            String message = track.getUrlString() + ": problem transcoding track to repository: " + resource.getRepository().getClass();
-
-                            plugin.getLogger().log(Level.WARNING, message, e);
-                            
-                            try {
-                                resource.delete();
-                            } catch (Exception ex) {
-                                e.addSuppressed(ex);
-                            }
-                            
-                            throw new IOException(message, e);
-                        } finally {
-                            synchronized (downloads) {
-                                downloads.remove(track);
-                            }
-                        }
-
-                        return resource;
-                    };
-
-                    synchronized (downloads) {
-                        if (!downloads.containsKey(track)) {
-                            downloads.put(track, cacheExecutor.submit(callable));
-                        }
-                    }
+                if (caching && resource.canWrite() &&
+                        (track.getLength() != null && track.getLength() > 0) && cacheExecutor != null) {
+                    cacheFuture = cacheAsync(resource, track);
+                } else {
+                    cacheFuture = null;
                 }
             }
 
             try {
-                // resample on an as-needed basis
+                // Resample on an as-needed basis
                 if (provider.getChannels() != getChannel().getMixer().getAudioChannels() ||
-                        provider.getSampleRate() != getChannel().getMixer().getAudioSampleRate())
+                        provider.getSampleRate() != getChannel().getMixer().getAudioSampleRate()) {
                     provider = new ResampledAudioProvider(
                             provider,
                             getChannel().getMixer().getBufferSize(),
@@ -627,60 +601,47 @@ public class Music implements PluginReference {
                                     getChannel().getMixer().getBufferSize()
                             )
                     );
-
-                AudioPlayer player = new TransitionedAudioPlayer(
-                        AudioPlayer.Type.BLOCKING,
-                        userAssociation.getUser(),
-                        provider,
-                        track.getLength() == null ? Double.MAX_VALUE : track.getLength(),
-                        track.getLength() == null ? 3D : Math.min(track.getLength() / 4D, 3D),
-                        new TransitionedAudioPlayer.Callback() {
-                            @Override
-                            public void onFadeIn() {
-                                getPlugin().getBot().getEventDispatcher().execute(new TrackStartedEvent(this, Music.this, track));
-                            }
-
-                            @Override
-                            public void onFadeOut() {
-                                if (fadeOut != null)
-                                    fadeOut.accept(track);
-
-                                getPlugin().getBot().getEventDispatcher().execute(new TrackFadeEvent(this, Music.this, track));
-                            }
-
-                            @Override
-                            public void onFinished(double timePlayedInSeconds) {
-                                double end = System.currentTimeMillis() / 1000D;
-
-                                if (userAssociation.getUser().getType() == UserType.ANONYMOUS) return;
-
-                                // clamp time played
-                                if (track.getLength() != null)
-                                    timePlayedInSeconds = Math.max(
-                                            0D,
-                                            Math.min(timePlayedInSeconds, track.getLength())
-                                    );
-
-                                double start = end - timePlayedInSeconds;
-                                track.addPlayAsync(conversation, userAssociation.getUser(), start, end);
-
-                                getPlugin().getBot().getEventDispatcher().execute(new TrackFinshedEvent(this, Music.this, track, timePlayedInSeconds));
-                            }
-                        }
-                );
-
-                final Play play = new Play(Music.this, track, channel, conversation, player);
-                player.getFuture().thenRun(() -> playingTracks.remove(channel, play));
-
-                try (AudioChannel.Ownership ignored = channel.obtainChannel(userAssociation)) {
-                    if (exclusive) stop(userAssociation, channel);
-                    channel.addPlayer(player);
-                    playingTracks.put(channel, play);
                 }
 
-                return play;
+                // Define a uniform constructor routine to create an instance of a Play.
+                Function<AudioPlayer, Play> playConstructor = (player) ->
+                        new Play(Music.this, track, channel, conversation, player, behavior, player != null, cacheFuture);
+
+                // Observing the behavior of the requested playback, handle playing the Track now or at a future time.
+                try (AudioChannel.Ownership ignored = channel.obtainChannel(userAssociation)) {
+                    if (behavior == null) {
+                        behavior = Play.Behavior.QUEUED;
+                    }
+
+                    if (behavior == Play.Behavior.EXCLUSIVE) {
+                        stop(userAssociation, channel);
+                    }
+
+                    if (behavior == Play.Behavior.EXCLUSIVE || behavior == Play.Behavior.PASSIVE ||
+                            (behavior == Play.Behavior.QUEUED && channel.isIdle())) {
+                        // Any case where we can immediately begin playback
+                        // Create an audio player based on a provider and the track to play, and associate its future
+                        // back to the Music singleton so we can track when it ends in this class.
+                        AudioPlayer player = createPlayer(provider, track);
+                        Play play = playConstructor.apply(player);
+                        player.getFuture().thenRun(() -> playingTracks.remove(channel, play));
+
+                        channel.addPlayer(player);
+                        playingTracks.put(channel, play);
+
+                        return play;
+                    } else if (behavior == Play.Behavior.QUEUED) {
+                        // Any case where we should instead enqueue playback of this track
+                        getQueue(channel).add(new Pair<>(userAssociation, track));
+                        return playConstructor.apply(null);
+                    } else {
+                        throw new UnsupportedOperationException(behavior.name());
+                    }
+                }
+            } catch (IllegalArgumentException | IllegalStateException exposed) {
+                throw exposed;
             } catch (Throwable e) {
-                // prevent leak:
+                // Prevent leak:
                 try {
                     provider.close();
                 } catch (Exception ex) {
@@ -689,6 +650,178 @@ public class Music implements PluginReference {
 
                 throw new IOException("Problem playing track", e);
             }
+        }
+
+        private Future<Repository.Resource> cacheAsync(Repository.Resource resource, Track track) {
+            synchronized (downloads) {
+                Future<Repository.Resource> future = downloads.get(track);
+                if (future == null) {
+                    if (cacheExecutor == null) {
+                        throw new NullPointerException("cacheExecutor");
+                    }
+
+                    future = cacheExecutor.submit(() -> cache(resource, track));
+                    downloads.put(track, future);
+                    return future;
+                } else {
+                    return future;
+                }
+            }
+        }
+
+        private Repository.Resource cache(Repository.Resource resource, Track track) throws IOException {
+            try {
+                plugin.getLogger().fine(track.getUrlString() + ": transcoding to " +
+                        resource.getRepository().getClass() + "...");
+
+                try (AudioProvider cachedAudioProvider = result.openProvider(protocol)) {
+                    AudioDownloadFormat downloadFormat = resource.getRepository().getDownloadFormat();
+                    AudioFormat targetFormat = AudioFormat.from(cachedAudioProvider.getFormat());
+
+                    try (Resampler resampler = protocol.openResampler(targetFormat, downloadFormat.getAudioFormat(),
+                            transcodeBufferSize)) {
+                        try (AudioConsumer cachedAudioConsumer =
+                                     protocol.openConsumer(resource.openWrite(), downloadFormat)) {
+                            // Set up resampling buffers
+                            float[] in_buffer = new float[transcodeBufferSize];
+                            int maxOutputBufferSize = (int) Math.ceil(transcodeBufferSize * (1d / resampler.getScale()));
+                            float[] out_buffer = new float[maxOutputBufferSize];
+
+                            boolean eof = false;
+
+                            long resampled = 0;
+                            int len;
+
+                            // Copy the samples to the consumer (file, NAS object, etc.) we're flushing to
+                            try {
+                                while ((len = cachedAudioProvider.read(in_buffer, 0, in_buffer.length)) > 0) {
+                                    len = resampler.resample(in_buffer, len, out_buffer, out_buffer.length);
+                                    cachedAudioConsumer.write(out_buffer, len);
+                                    resampled += len;
+                                }
+                            } catch (EOFException ignored) {
+                                // Ignore; EOFs are expected in the audio sample stream
+                                eof = true;
+                            }
+
+                            // Flush the resampler to get any remaining samples out of the buffer
+                            len = resampler.flush(out_buffer, out_buffer.length);
+                            if (len > 0)
+                                cachedAudioConsumer.write(out_buffer, len);
+
+                            // Look for the special case where we break out of the while loop when len <= 0
+                            if (!eof) {
+                                throw new IOException("resampled " + resampled +
+                                        " samples but did not encounter expected EOF.");
+                            }
+                        }
+                    }
+                }
+
+                TrackRepository trackRepository = resource.getRepository().getTrackRepository();
+                if (trackRepository.getFile(resource.getUUID()) == null)
+                    trackRepository.createFile(trackRepository, resource.getUUID(), resource.getFormat());
+
+                Event event = new TrackDownloadedEvent(this, Music.this, track, resource);
+                getPlugin().getBot().getEventDispatcher().execute(event);
+
+                plugin.getLogger().fine(track.getUrlString() + ": transcode to " +
+                        resource.getRepository().getClass() + " completed");
+            } catch (Exception e) {
+                String message = track.getUrlString() + ": problem transcoding track to repository: " +
+                        resource.getRepository().getClass();
+
+                // Attempt to delete the target resource as we didn't succeed in caching it.
+                try {
+                    resource.delete();
+                } catch (Exception ex) {
+                    // This is a problem, but suppress it in favor of the primary cause.
+                    e.addSuppressed(ex);
+                }
+
+                // Caching occurs on a thread that doesn't handle exceptions -- go ahead and warn it here
+                plugin.getLogger().log(Level.WARNING, message, e);
+
+                throw new IOException(message, e);
+            } finally {
+                synchronized (downloads) {
+                    downloads.remove(track);
+                }
+            }
+
+            return resource;
+        }
+
+        private AudioPlayer createPlayer(AudioProvider provider, Track track) {
+            return new TransitionedAudioPlayer(
+                    AudioPlayer.Type.BLOCKING,
+                    userAssociation.getUser(),
+                    provider,
+                    track.getLength() == null ? Double.MAX_VALUE : track.getLength(),
+                    track.getLength() == null ? 3D : Math.min(track.getLength() / 4D, 3D),
+                    new TransitionedAudioPlayer.Callback() {
+                        @Override
+                        public void onFadeIn() {
+                            Event event = new TrackStartedEvent(this, Music.this, track);
+                            getPlugin().getBot().getEventDispatcher().execute(event);
+                        }
+
+                        @Override
+                        public void onFadeOut() {
+                            // Check queue
+                            Pair<UserAssociation, Track> queuedPlay;
+
+                            while ((queuedPlay = getQueue(channel).poll()) != null) {
+                                UserAssociation userAssociation = queuedPlay.getLeft();
+                                Track track = queuedPlay.getRight();
+
+                                try {
+                                    Music.this.play(userAssociation, conversation, community,
+                                            (builder) -> builder
+                                                    .setBehavior(Play.Behavior.PASSIVE)
+                                                    .setFadeOut(fadeOut) // Chain fade-out so playlists can pick back up
+                                                    .setTrack(trackSelector -> trackSelector.find(track))
+                                    );
+
+                                    break;
+                                } catch (IOException e) {
+                                    String message = "Couldn't play queued track \"" + track.getName() + "\"";
+                                    Logger.getGlobal().log(Level.WARNING, message, e);
+                                    conversation.getChat().sendMessage("(" + message + ")");
+                                }
+                            }
+
+                            Track nextTrack = queuedPlay != null ? queuedPlay.getRight() : null;
+
+                            if (fadeOut != null) {
+                                fadeOut.accept(track, nextTrack);
+                            }
+
+                            Event event = new TrackFadeEvent(this, Music.this, track, nextTrack);
+                            getPlugin().getBot().getEventDispatcher().execute(event);
+                        }
+
+                        @Override
+                        public void onFinished(double timePlayedInSeconds) {
+                            double end = System.currentTimeMillis() / 1000D;
+
+                            if (userAssociation.getUser().getType() == UserType.ANONYMOUS) return;
+
+                            // clamp time played
+                            if (track.getLength() != null)
+                                timePlayedInSeconds = Math.max(
+                                        0D,
+                                        Math.min(timePlayedInSeconds, track.getLength())
+                                );
+
+                            double start = end - timePlayedInSeconds;
+                            track.addPlayAsync(conversation, userAssociation.getUser(), start, end);
+
+                            Event event = new TrackFinshedEvent(this, Music.this, track, timePlayedInSeconds);
+                            getPlugin().getBot().getEventDispatcher().execute(event);
+                        }
+                    }
+            );
         }
     }
 

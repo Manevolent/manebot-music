@@ -115,7 +115,7 @@ public class DefaultPlaylist implements Playlist {
     @Override
     public Track next() throws NoSuchElementException, IllegalStateException {
         if (!isRunning())
-            throw new IllegalStateException();
+            throw new IllegalStateException("not running");
 
         if (!hasNext()) {
             setRunning(false);
@@ -127,8 +127,12 @@ public class DefaultPlaylist implements Playlist {
             this.track = Objects.requireNonNull(queue.next());
 
             Play play = music.play(getUser(), getConversation(), builder -> {
-                builder.setExclusive(false); // important to not step on a fade-out
-                builder.setFadeOut((track) -> next());
+                builder.setBehavior(Play.Behavior.PASSIVE); // important to not step on a fade-out
+                builder.setFadeOut((track, nextTrack) -> {
+                    if (nextTrack == null) { // See setFadeOut documentation
+                        next();
+                    }
+                });
                 builder.setTrack(selector -> selector.find(track));
             });
 
