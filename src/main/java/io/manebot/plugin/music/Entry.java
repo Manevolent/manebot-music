@@ -39,6 +39,8 @@ public class Entry implements PluginEntry {
                 Music.class,
                 plugin -> new Music(plugin, database, musicManager, audioPlugin.getInstance(Audio.class))
         );
+        builder.addListener(future -> future.getPlugin().getInstance(Music.class));
+
         builder.addCommand("playlist", future -> new PlaylistCommand(
                 future.getPlugin().getInstance(Music.class),
                 database
