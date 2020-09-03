@@ -13,12 +13,16 @@ import io.manebot.database.model.Platform;
 import io.manebot.database.search.Search;
 import io.manebot.database.search.SearchResult;
 import io.manebot.event.Event;
+import io.manebot.event.EventHandler;
+import io.manebot.event.EventListener;
 import io.manebot.platform.PlatformUser;
 import io.manebot.plugin.Plugin;
 import io.manebot.plugin.PluginReference;
 import io.manebot.plugin.audio.*;
 import io.manebot.plugin.audio.channel.AudioChannel;
 
+import io.manebot.plugin.audio.event.channel.AudioChannelUserJoinEvent;
+import io.manebot.plugin.audio.event.channel.AudioChannelUserLeaveEvent;
 import io.manebot.plugin.audio.mixer.input.AudioProvider;
 import io.manebot.plugin.audio.mixer.input.ResampledAudioProvider;
 import io.manebot.plugin.audio.mixer.output.*;
@@ -57,7 +61,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-public class Music implements PluginReference {
+public class Music implements PluginReference, EventListener {
     private static final int transcodeBufferSize = 32768;
 
     private final Plugin plugin;
@@ -291,8 +295,11 @@ public class Music implements PluginReference {
     }
 
     public int stop(UserAssociation userAssociation, AudioChannel channel) {
+        return stop(userAssociation, channel, Permission.hasPermission("audio.stop.all"));
+    }
+
+    public int stop(UserAssociation userAssociation, AudioChannel channel, boolean override) {
         List<AudioPlayer> audioPlayers = channel.getPlayers();
-        boolean override = Permission.hasPermission("audio.stop.all");
 
         int stopped = 0;
 
@@ -301,22 +308,28 @@ public class Music implements PluginReference {
         if (playlist != null) {
             int playing = playlist.getPlayers().size();
             if ((playlist.getUser() == null ||
-                    playlist.getUser().getUser().equals(userAssociation.getUser()) ||
-                    override) && playlist.setRunning(false)) {
+                    playlist.getUser().getUser().equals(userAssociation.getUser()) || override)
+                    && playlist.setRunning(false)) {
                 stopped += playing;
             }
         }
 
         // Stop players
-        int skipped = 0;
         for (AudioPlayer player : audioPlayers) {
             if (!player.isPlaying()) continue;
 
             if (player.getOwner() == null || player.getOwner().equals(userAssociation.getUser()) || override) {
-                if (player.kill()) stopped++;
-            } else {
-                skipped ++;
+                if (player.kill()) {
+                    stopped++;
+                }
             }
+        }
+
+        // If we stopped anything, clear the queue
+        if (stopped > 0 || override) {
+            Queue<Pair<UserAssociation, Track>> queue = getQueue(channel);
+            stopped += queue.size();
+            queue.clear();
         }
 
         return stopped;
@@ -466,6 +479,18 @@ public class Music implements PluginReference {
 
     public ResamplerFactory getResamplerFactory() {
         return resamplerFactory;
+    }
+
+    @EventHandler()
+    public void onUserLeave(AudioChannelUserLeaveEvent event) {
+        PlatformUser platformUser = event.getPlatformUser();
+        if (platformUser != null) {
+            stop(platformUser.getAssociation(), event.getChannel(), false);
+
+            // Also remove any queued tracks that belong to this user
+            getQueue(event.getChannel())
+                    .removeIf(item -> item.getLeft().getPlatformUser().equals(event.getPlatformUser()));
+        }
     }
 
     private class PlayBuilder implements Play.Builder {
