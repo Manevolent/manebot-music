@@ -6,9 +6,6 @@ import io.manebot.plugin.music.Music;
 import io.manebot.plugin.music.command.playlist.PlaylistInfoCommand;
 import io.manebot.plugin.music.command.playlist.PlaylistSkipCommand;
 import io.manebot.plugin.music.command.playlist.PlaylistStartCommand;
-import io.manebot.plugin.music.command.track.TrackInfoCommand;
-import io.manebot.plugin.music.command.track.TrackPlayCommand;
-import io.manebot.plugin.music.command.track.TrackSearchCommand;
 
 public class PlaylistCommand extends RoutedCommandExecutor {
     public PlaylistCommand(Music music, Database database) {

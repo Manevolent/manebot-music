@@ -298,40 +298,48 @@ public class Music implements PluginReference, EventListener {
     }
 
     public int stop(UserAssociation userAssociation, AudioChannel channel, boolean override) {
-        List<AudioPlayer> audioPlayers = channel.getPlayers();
+        Set<AudioPlayer> stopped = new HashSet<>();
 
-        int stopped = 0;
+        // Stop any unbounded tracks (such as live-streams)
+        for (Play play : new ArrayList<>(playingTracks.values())) {
+            if (play.getTrack() != null && play.getTrack().getLength() == null && play.getPlayer().isPlaying() &&
+                    play.getPlayer().kill()) {
+                stopped.add(play.getPlayer());
+            }
+        }
 
-        // Stop playlist(s)
+        // Stop playlist(s) and their associated players
         Playlist playlist = getPlaylist(channel);
         if (playlist != null) {
-            int playing = playlist.getPlayers().size();
+            Collection<AudioPlayer> playlistPlayers = playlist.getPlayers();
             if ((playlist.getUser() == null ||
                     playlist.getUser().getUser().equals(userAssociation.getUser()) || override)
                     && playlist.setRunning(false)) {
-                stopped += playing;
+                stopped.addAll(playlistPlayers);
             }
         }
 
         // Stop players
+        List<AudioPlayer> audioPlayers = channel.getPlayers();
         for (AudioPlayer player : audioPlayers) {
             if (!player.isPlaying()) continue;
 
             if (player.getOwner() == null || player.getOwner().equals(userAssociation.getUser()) || override) {
                 if (player.kill()) {
-                    stopped++;
+                    stopped.add(player);
                 }
             }
         }
 
         // If we stopped anything, clear the queue
-        if (stopped > 0 || override) {
+        int stoppedCount = stopped.size();
+        if (stoppedCount > 0 || override) {
             Queue<Pair<UserAssociation, Track>> queue = getQueue(channel);
-            stopped += queue.size();
+            stoppedCount += queue.size();
             queue.clear();
         }
 
-        return stopped;
+        return stoppedCount;
     }
 
     public Playlist startPlaylist(UserAssociation userAssociation,
