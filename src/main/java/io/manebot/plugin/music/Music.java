@@ -297,6 +297,17 @@ public class Music implements PluginReference, EventListener {
         return stop(userAssociation, channel, Permission.hasPermission("audio.stop.all"));
     }
 
+    public boolean isBlockedForever() {
+        // Stop any unbounded tracks (such as live-streams)
+        for (Play play : new ArrayList<>(playingTracks.values())) {
+            if (play.getTrack() != null && play.getTrack().getLength() == null && play.getPlayer().isPlaying()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public int stop(UserAssociation userAssociation, AudioChannel channel, boolean override) {
         Set<AudioPlayer> stopped = new HashSet<>();
 
@@ -677,7 +688,8 @@ public class Music implements PluginReference, EventListener {
                         behavior = Play.Behavior.QUEUED;
                     }
 
-                    if (behavior == Play.Behavior.EXCLUSIVE) {
+                    if (behavior == Play.Behavior.EXCLUSIVE ||
+                            (behavior == Play.Behavior.QUEUED && isBlockedForever())) {
                         stop(userAssociation, channel);
                     }
 
