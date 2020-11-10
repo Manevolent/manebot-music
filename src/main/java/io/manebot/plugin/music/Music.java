@@ -294,60 +294,60 @@ public class Music implements PluginReference, EventListener {
     }
 
     public int stop(UserAssociation userAssociation, AudioChannel channel) {
-        return stop(userAssociation, channel, Permission.hasPermission("audio.stop.all"));
+        return stop(userAssociation, channel, getDefaultStopFlags());
     }
 
-    public boolean isBlockedForever() {
-        // Stop any unbounded tracks (such as live-streams)
-        for (Play play : new ArrayList<>(playingTracks.values())) {
-            if (play.getTrack() != null && play.getTrack().getLength() == null && play.getPlayer().isPlaying()) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    public int stop(UserAssociation userAssociation, AudioChannel channel, boolean override) {
+    public int stop(UserAssociation userAssociation, AudioChannel channel, EnumSet<StopFlag> flags) {
         Set<AudioPlayer> stopped = new HashSet<>();
 
         // Stop any unbounded tracks (such as live-streams)
-        for (Play play : new ArrayList<>(playingTracks.values())) {
-            if (play.getTrack() != null && play.getTrack().getLength() == null && play.getPlayer().isPlaying() &&
-                    play.getPlayer().kill()) {
-                stopped.add(play.getPlayer());
-            }
-        }
-
-        // Stop playlist(s) and their associated players
-        Playlist playlist = getPlaylist(channel);
-        if (playlist != null) {
-            Collection<AudioPlayer> playlistPlayers = playlist.getPlayers();
-            if ((playlist.getUser() == null ||
-                    playlist.getUser().getUser().equals(userAssociation.getUser()) || override)
-                    && playlist.setRunning(false)) {
-                stopped.addAll(playlistPlayers);
-            }
-        }
-
-        // Stop players
-        List<AudioPlayer> audioPlayers = channel.getPlayers();
-        for (AudioPlayer player : audioPlayers) {
-            if (!player.isPlaying()) continue;
-
-            if (player.getOwner() == null || player.getOwner().equals(userAssociation.getUser()) || override) {
-                if (player.kill()) {
-                    stopped.add(player);
+        if (flags.contains(StopFlag.STREAMS)) {
+            for (Play play : new ArrayList<>(playingTracks.values())) {
+                if (play.getTrack() != null && play.getTrack().getLength() == null && play.getPlayer().isPlaying() &&
+                        play.getPlayer().kill()) {
+                    stopped.add(play.getPlayer());
                 }
             }
         }
 
-        // If we stopped anything, clear the queue
+        // Stop playlist(s) and their associated players
+        if (flags.contains(StopFlag.PLAYLISTS)) {
+            Playlist playlist = getPlaylist(channel);
+            if (playlist != null) {
+                Collection<AudioPlayer> playlistPlayers = playlist.getPlayers();
+                if ((playlist.getUser() == null ||
+                        playlist.getUser().getUser().equals(userAssociation.getUser())
+                        || flags.contains(StopFlag.OTHERS))
+                        && playlist.setRunning(false)) {
+                    stopped.addAll(playlistPlayers);
+                }
+            }
+        }
+
+        // Stop players
+        if (flags.contains(StopFlag.TRACKS)) {
+            List<AudioPlayer> audioPlayers = channel.getPlayers();
+            for (AudioPlayer player : audioPlayers) {
+                if (!player.isPlaying()) continue;
+
+                if (player.getOwner() == null || player.getOwner().equals(userAssociation.getUser())
+                        || flags.contains(StopFlag.OTHERS)) {
+                    if (player.kill()) {
+                        stopped.add(player);
+                    }
+                }
+            }
+        }
+
         int stoppedCount = stopped.size();
-        if (stoppedCount > 0 || override) {
-            Queue<Pair<UserAssociation, Track>> queue = getQueue(channel);
-            stoppedCount += queue.size();
-            queue.clear();
+
+        // If we stopped anything, clear the queue
+        if (flags.contains(StopFlag.QUEUE)) {
+            if (stoppedCount > 0) {
+                Queue<Pair<UserAssociation, Track>> queue = getQueue(channel);
+                queue.removeIf(pair ->
+                        pair.getLeft().equals(userAssociation.getUser()) || flags.contains(StopFlag.OTHERS));
+            }
         }
 
         return stoppedCount;
@@ -507,7 +507,7 @@ public class Music implements PluginReference, EventListener {
         UserAssociation userAssociation = platformUser.getAssociation();
 
         if (userAssociation != null) {
-            stop(userAssociation, event.getChannel(), false);
+            stop(userAssociation, event.getChannel(), EnumSet.of(StopFlag.TRACKS, StopFlag.PLAYLISTS, StopFlag.QUEUE));
 
             // Also remove any queued tracks that belong to this user
             getQueue(event.getChannel())
@@ -527,7 +527,11 @@ public class Music implements PluginReference, EventListener {
                 return;
 
             if (play.getUser().equals(userAssociation)) {
-                event.follow();
+                if (event.wasMovedAway()) {
+                    stop(userAssociation, event.getFromChannel(), EnumSet.allOf(StopFlag.class));
+                } else {
+                    event.follow();
+                }
             }
         }
     }
@@ -688,8 +692,9 @@ public class Music implements PluginReference, EventListener {
                         behavior = Play.Behavior.QUEUED;
                     }
 
-                    if (behavior == Play.Behavior.EXCLUSIVE ||
-                            (behavior == Play.Behavior.QUEUED && isBlockedForever())) {
+                    if (behavior == Play.Behavior.QUEUED) {
+                        stop(userAssociation, channel, EnumSet.of(StopFlag.STREAMS));
+                    } else if (behavior == Play.Behavior.EXCLUSIVE) {
                         stop(userAssociation, channel);
                     }
 
@@ -1065,5 +1070,21 @@ public class Music implements PluginReference, EventListener {
         public TrackQueue from(Search search) {
             return new SearchedTrackQueue(database, community, search);
         }
+    }
+
+    public static EnumSet<StopFlag> getDefaultStopFlags() {
+        return getDefaultStopFlags(Permission.hasPermission("audio.stop.all"));
+    }
+
+    public static EnumSet<StopFlag> getDefaultStopFlags(boolean others) {
+        return EnumSet.complementOf(others ? EnumSet.noneOf(StopFlag.class) : EnumSet.of(StopFlag.OTHERS));
+    }
+
+    public enum StopFlag {
+        QUEUE,
+        TRACKS,
+        PLAYLISTS,
+        STREAMS,
+        OTHERS
     }
 }
