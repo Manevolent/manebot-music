@@ -55,13 +55,17 @@ public class Community extends TimedRow {
     }
 
     public Track getTrack(URL url) {
+        return getTrack(url.toExternalForm());
+    }
+
+    public Track getTrack(String urlString) {
         Track track = database.execute(s -> {
             return s.createQuery(
                     "SELECT x FROM " + Track.class.getName() + " x " +
                             "INNER JOIN x.community c " +
                             "WHERE c.communityId = :communityId AND x.url=:url",
                     Track.class
-            ).setParameter("communityId", communityId).setParameter("url", url.toExternalForm())
+            ).setParameter("communityId", communityId).setParameter("url", urlString)
                     .getResultList()
                     .stream()
                     .findFirst()

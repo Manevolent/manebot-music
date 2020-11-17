@@ -1,12 +1,12 @@
 package io.manebot.plugin.music.source;
 
-import io.manebot.plugin.audio.mixer.input.AudioProvider;
 import io.manebot.plugin.music.*;
 import io.manebot.plugin.music.database.model.Community;
 import io.manebot.plugin.music.database.model.Track;
 
 import java.io.IOException;
 import java.io.InputStream;
+
 import java.net.URL;
 import java.util.Objects;
 import java.util.stream.Stream;
@@ -30,8 +30,8 @@ public class DatabaseTrackSource implements TrackSource {
 
     @Override
     public Result find(Community community, URL url) {
-        return Stream.of(community)
-                .map(c -> c.getTrack(url))
+        return Stream.of(url.toExternalForm(), trimTrailingSlashes(url))
+                .map(community::getTrack)
                 .filter(Objects::nonNull)
                 .map(track -> new LocalResult(track, ResultPriority.IDEAL))
                 .findFirst().orElse(null);
@@ -51,5 +51,13 @@ public class DatabaseTrackSource implements TrackSource {
         public boolean isLocal() {
             return true;
         }
+    }
+
+    private static String trimTrailingSlashes(URL url) {
+        String urlString = url.toExternalForm();
+        while (urlString.endsWith("/") && urlString.length() > 1) {
+            urlString = urlString.substring(0, urlString.length() - 1);
+        }
+        return urlString;
     }
 }

@@ -186,7 +186,7 @@ public class YoutubeDLTrackSource implements TrackSource {
                 response.get("title").getAsString();
         
         if (title == null || title.length() <= 0)
-            throw new TrackDownloadException("invalid track title: " + title);
+            title = url.getPath();
 
         Double duration;
 

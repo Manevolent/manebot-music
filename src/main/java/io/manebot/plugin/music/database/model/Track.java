@@ -606,7 +606,7 @@ public class Track extends TimedRow {
                             );
                         }
                     },
-                    SearchOperator.MERGE
+                    SearchOperator.INCLUDE
             ));
 
             builder.command(new SearchHandlerPropertyIn(
