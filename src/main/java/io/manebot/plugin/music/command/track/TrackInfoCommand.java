@@ -43,7 +43,7 @@ public class TrackInfoCommand extends AnnotatedCommandExecutor {
         if (community == null)
             throw new CommandArgumentException("There is no music community associated with this conversation.");
 
-        Track track = community.getTrack(url);
+        Track track = community.findTrack(url);
         if (track == null)
             throw new CommandArgumentException("Track not found.");
 

@@ -9,7 +9,10 @@ import javax.persistence.*;
 import java.net.URL;
 import java.sql.SQLException;
 import java.util.Collection;
+import java.util.Set;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @javax.persistence.Entity
 @Table(
@@ -54,24 +57,29 @@ public class Community extends TimedRow {
         ).setParameter("communityId", getCommunityId()).getSingleResult());
     }
 
-    public Track getTrack(URL url) {
-        return getTrack(url.toExternalForm());
+    /**
+     * Finds a track, allowing for a slash to be contained within the URL.
+     * @param url URL to find.
+     * @return Track, if one is available.
+     */
+    public Track findTrack(URL url) {
+        return findTrack(url.toExternalForm());
     }
 
-    public Track getTrack(String urlString) {
-        Track track = database.execute(s -> {
-            return s.createQuery(
-                    "SELECT x FROM " + Track.class.getName() + " x " +
-                            "INNER JOIN x.community c " +
-                            "WHERE c.communityId = :communityId AND x.url=:url",
-                    Track.class
-            ).setParameter("communityId", communityId).setParameter("url", urlString)
-                    .getResultList()
-                    .stream()
-                    .findFirst()
-                    .orElse(null);
-        });
+    /**
+     * Finds a track, allowing for a slash to be contained within the URL.
+     * @param urlString URL string to find.
+     * @return Track, if one is available.
+     */
+    public Track findTrack(String urlString) {
+        Set<String> urlStrings = Stream.of(urlString)
+                .flatMap(x -> Stream.of(x, trimTrailingSlashes(x), appendTrailingSlash(x)))
+                .collect(Collectors.toSet());
+        if (urlStrings.size() <= 0) {
+            return null;
+        }
 
+        Track track = getFirstTrack(urlStrings);
         if (track != null && track.isDeleted()) {
             throw new IllegalArgumentException("Track was deleted.");
         }
@@ -79,8 +87,23 @@ public class Community extends TimedRow {
         return track;
     }
 
+    public Track getFirstTrack(Set<String> urlStrings) {
+        return database.execute(s -> {
+            return s.createQuery(
+                    "SELECT x FROM " + Track.class.getName() + " x " +
+                            "INNER JOIN x.community c " +
+                            "WHERE c.communityId = :communityId AND x.url IN :urls",
+                    Track.class
+            ).setParameter("communityId", communityId).setParameter("urls", urlStrings)
+                    .getResultList()
+                    .stream()
+                    .findFirst()
+                    .orElse(null);
+        });
+    }
+
     public Track getOrCreateTrack(URL url, Consumer<Track.Builder> constructor) {
-        Track track = getTrack(url);
+        Track track = findTrack(url);
         if (track != null) {
             return track; // shortcut
         } else {
@@ -206,5 +229,19 @@ public class Community extends TimedRow {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public static String trimTrailingSlashes(String urlString) {
+        while (urlString.endsWith("/") && urlString.length() > 1) {
+            urlString = urlString.substring(0, urlString.length() - 1);
+        }
+        return urlString;
+    }
+
+    public static String appendTrailingSlash(String urlString) {
+        if (!urlString.endsWith("/")) {
+            urlString += "/";
+        }
+        return urlString;
     }
 }

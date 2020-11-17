@@ -30,8 +30,8 @@ public class DatabaseTrackSource implements TrackSource {
 
     @Override
     public Result find(Community community, URL url) {
-        return Stream.of(url.toExternalForm(), trimTrailingSlashes(url))
-                .map(community::getTrack)
+        return Stream.of(url.toExternalForm())
+                .map(community::findTrack)
                 .filter(Objects::nonNull)
                 .map(track -> new LocalResult(track, ResultPriority.IDEAL))
                 .findFirst().orElse(null);
@@ -51,13 +51,5 @@ public class DatabaseTrackSource implements TrackSource {
         public boolean isLocal() {
             return true;
         }
-    }
-
-    private static String trimTrailingSlashes(URL url) {
-        String urlString = url.toExternalForm();
-        while (urlString.endsWith("/") && urlString.length() > 1) {
-            urlString = urlString.substring(0, urlString.length() - 1);
-        }
-        return urlString;
     }
 }
