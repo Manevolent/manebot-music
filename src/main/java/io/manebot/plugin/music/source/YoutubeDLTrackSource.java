@@ -181,12 +181,10 @@ public class YoutubeDLTrackSource implements TrackSource {
         }
     
         // track title
-        String title = response.has("fulltitle") ?
+        String youtubeDlTitle = response.has("fulltitle") ?
                 response.get("fulltitle").getAsString() :
                 response.get("title").getAsString();
-        
-        if (title == null || title.length() <= 0)
-            title = url.getPath();
+        String title = youtubeDlTitle != null && youtubeDlTitle.length() > 0 ? youtubeDlTitle : url.getPath();
 
         Double duration;
 
