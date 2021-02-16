@@ -127,22 +127,28 @@ public final class MusicManager {
     }
 
     public Track getLastPlayed(Conversation conversation) {
+        return getLastPlayed(conversation, 1, 300).stream().findFirst().orElse(null);
+    }
+
+    public List<Track> getLastPlayed(Conversation conversation, int maximum, int seconds) {
         return database.execute(s -> {
             return s.createQuery(
                     "SELECT t FROM " + TrackPlay.class.getName() + " x " +
-                    "INNER JOIN x.track t " +
-                    "INNER JOIN x.conversation c " +
-                    "WHERE c.conversationId = :conversationId AND x.created > :oldest " +
-                    "ORDER BY x.end DESC", Track.class)
+                            "INNER JOIN x.track t " +
+                            "INNER JOIN x.conversation c " +
+                            "WHERE c.conversationId = :conversationId AND x.created > :oldest " +
+                            "ORDER BY x.end DESC", Track.class)
                     .setParameter(
                             "conversationId",
                             ((io.manebot.database.model.Conversation)conversation).getConversationId()
                     )
                     .setParameter(
                             "oldest",
-                            (int)((System.currentTimeMillis() - (60 * 1000L * 5L))/1000)
+                            Math.max(0, (int)((System.currentTimeMillis() - (seconds * 1000L)) / 1000))
                     )
-                    .getResultStream().findFirst().orElse(null);
+                    .setMaxResults(maximum)
+                    .getResultStream()
+                    .collect(Collectors.toList());
         });
     }
 

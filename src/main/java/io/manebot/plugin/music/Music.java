@@ -223,6 +223,15 @@ public class Music implements PluginReference, EventListener {
         return musicManager.getLastPlayed(conversation);
     }
 
+    /**
+     * Gets the last played tracks on the conversation provided.
+     * @param conversation conversation.
+     * @return Track instance if one was recently played, or null otherwise.
+     */
+    public List<Track> getPlayedTracks(Conversation conversation, int maximum, int seconds) {
+        return musicManager.getLastPlayed(conversation, maximum, seconds);
+    }
+
     public TrackSource.Result findRemoteTrack(Community community, URL url) throws IllegalArgumentException {
         Objects.requireNonNull(community);
 
@@ -808,7 +817,7 @@ public class Music implements PluginReference, EventListener {
 
                 plugin.getLogger().fine(track.getUrlString() + ": transcode to " +
                         resource.getRepository().getClass() + " completed");
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 String message = track.getUrlString() + ": problem transcoding track to repository: " +
                         resource.getRepository().getClass();
 

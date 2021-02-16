@@ -1,5 +1,6 @@
 package io.manebot.plugin.music.database.model;
 
+import io.manebot.command.response.CommandListResponse;
 import io.manebot.conversation.Conversation;
 import io.manebot.database.Database;
 import io.manebot.database.expressions.ExtendedExpressions;
@@ -8,6 +9,7 @@ import io.manebot.database.model.TimedRow;
 import io.manebot.database.search.SearchArgument;
 import io.manebot.database.search.SearchHandler;
 import io.manebot.database.search.SearchOperator;
+import io.manebot.database.search.SortOrder;
 import io.manebot.database.search.handler.*;
 import io.manebot.plugin.music.repository.*;
 import io.manebot.user.User;
@@ -46,6 +48,14 @@ import java.util.stream.Collectors;
         }
 )
 public class Track extends TimedRow {
+    public static CommandListResponse.ListElementFormatter<Track> FORMATTER = (textBuilder, o) -> textBuilder
+            .append("\"" + o.getName() + "\"")
+            .append(" (")
+            .appendUrl(o.getUrlString())
+            .append(") (")
+            .append(Integer.toString(o.getLikes() - o.getDislikes()))
+            .append(" likes)");
+
     @Transient
     private final Database database;
 
@@ -580,7 +590,8 @@ public class Track extends TimedRow {
         return database.createSearchHandler(Track.class, (builder) -> {
             builder.string(new SearchHandlerPropertyContains((root) -> root.get("name")));
 
-            builder.sort("date", root -> root.get("created")).defaultSort("date");
+            builder.sort("date", root -> root.get("created")).defaultSort("date", SortOrder.DESCENDING);
+            builder.sort("created", root -> root.get("created"));
             builder.sort("score", root -> root.get("score"));
             builder.sort("dislikes", root -> root.get("dislikes"));
             builder.sort("likes", root -> root.get("likes"));

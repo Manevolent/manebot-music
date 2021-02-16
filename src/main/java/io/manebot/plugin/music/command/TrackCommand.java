@@ -10,11 +10,16 @@ public class TrackCommand extends RoutedCommandExecutor {
     public TrackCommand(Music music, Database database) {
         route("search", new TrackSearchCommand(music, database)).alias("s");
         route("play", new TrackQueueCommand(music, database)).asDefaultRoute();
+        route("queue", new TrackQueueListCommand(music, database)).alias("q");
+        route("repeat", new TrackRepeatCommand(music, database)).alias("replay");
         route("info", new TrackInfoCommand(music, database)).asNullRoute();
+        route("debug-info", new TrackDebugInfoCommand(music, database));
         route("tag", new TrackTagCommand(music, database));
         route("untag", new TrackUntagCommand(music, database));
         route("random", new TrackRandomCommand(music, database));
         route("delete", new TrackDeleteCommand(music, database));
+        route("history", new TrackHistoryCommand(music, database));
+        route("loop", new TrackLoopCommand(music, database));
     }
 
     @Override
